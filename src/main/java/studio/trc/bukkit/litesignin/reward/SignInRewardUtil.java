@@ -23,7 +23,6 @@ import studio.trc.bukkit.litesignin.reward.command.SignInRewardCommand;
 import studio.trc.bukkit.litesignin.reward.command.SignInRewardCommandType;
 import studio.trc.bukkit.litesignin.reward.util.SignInSound;
 import studio.trc.bukkit.litesignin.util.PluginControl;
-import studio.trc.bukkit.litesignin.util.LiteSignInProperties;
 
 public abstract class SignInRewardUtil
     implements SignInReward
@@ -194,11 +193,11 @@ public abstract class SignInRewardUtil
                     Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
                     placeholders.put("{sound}", args[0]);
                     placeholders.put("{path}", configPath + "." + value);
-                    LiteSignInProperties.sendOperationMessage("InvalidSound", placeholders);
+                    MessageUtil.sendConsoleMessage("Console-Messages.Invalid-Sound", ConfigurationType.MESSAGES, placeholders);
                 } catch (Exception ex) {
                     Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
                     placeholders.put("{path}", configPath + "." + value);
-                    LiteSignInProperties.sendOperationMessage("InvalidSoundSetting", placeholders);
+                    MessageUtil.sendConsoleMessage("Console-Messages.Invalid-Sound-Setting", ConfigurationType.MESSAGES, placeholders);
                 }
             }); 
         }
@@ -219,7 +218,7 @@ public abstract class SignInRewardUtil
                         } catch (Exception ex) {
                             Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
                             placeholders.put("{path}", configPath + "." + name);
-                            LiteSignInProperties.sendOperationMessage("InvalidEnchantmentSetting", placeholders);
+                            MessageUtil.sendConsoleMessage("Console-Messages.Invalid-Enchantment-Setting", ConfigurationType.MESSAGES, placeholders);
                         }
                     }
                 }
@@ -227,12 +226,12 @@ public abstract class SignInRewardUtil
                     Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
                     placeholders.put("{enchantment}", data[0]);
                     placeholders.put("{path}", configPath + "." + name);
-                    LiteSignInProperties.sendOperationMessage("InvalidEnchantment", placeholders);
+                    MessageUtil.sendConsoleMessage("Console-Messages.Invalid-Enchantment", ConfigurationType.MESSAGES, placeholders);
                 }
             } catch (Exception ex) {
                 Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
                 placeholders.put("{path}", configPath + "." + name);
-                LiteSignInProperties.sendOperationMessage("InvalidEnchantmentSetting", placeholders);
+                MessageUtil.sendConsoleMessage("Console-Messages.Invalid-Enchantment-Setting", ConfigurationType.MESSAGES, placeholders);
             }
         }
     }

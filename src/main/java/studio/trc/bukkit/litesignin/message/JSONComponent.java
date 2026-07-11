@@ -11,7 +11,7 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 
 import studio.trc.bukkit.litesignin.util.AdventureUtils;
-import studio.trc.bukkit.litesignin.util.LiteSignInProperties;
+import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 
 public class JSONComponent
 {
@@ -65,7 +65,7 @@ public class JSONComponent
             return component;
         } catch (Exception ex) {
             placeholders.put("{exception}", ex.getLocalizedMessage() != null ? ex.getLocalizedMessage() : "null");
-            LiteSignInProperties.sendOperationMessage("LoadingJSONComponentFailed", placeholders);
+            MessageUtil.sendConsoleMessage("Console-Messages.Loading-JSON-Component-Failed", ConfigurationType.MESSAGES, placeholders);
             ex.printStackTrace();
         }
         return Component.empty();

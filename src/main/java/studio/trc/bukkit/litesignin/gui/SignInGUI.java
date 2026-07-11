@@ -27,7 +27,6 @@ import studio.trc.bukkit.litesignin.queue.SignInQueue;
 import studio.trc.bukkit.litesignin.gui.SignInGUIColumn.KeyType;
 import studio.trc.bukkit.litesignin.util.SignInDate;
 import studio.trc.bukkit.litesignin.util.PluginControl;
-import studio.trc.bukkit.litesignin.util.LiteSignInProperties;
 import studio.trc.bukkit.litesignin.message.color.ColorUtils;
 import studio.trc.bukkit.litesignin.util.SkullManager;
 
@@ -447,18 +446,18 @@ public class SignInGUI
                             break;
                         } catch (Exception ex) {
                             placeholders.put("{path}", configPath + "." + name);
-                            LiteSignInProperties.sendOperationMessage("InvalidEnchantmentSetting", placeholders);
+                            MessageUtil.sendConsoleMessage("Console-Messages.Invalid-Enchantment-Setting", ConfigurationType.MESSAGES, placeholders);
                         }
                     }
                 }
                 if (invalid) {
                     placeholders.put("{enchantment}", data[0]);
                     placeholders.put("{path}", configPath + "." + name);
-                    LiteSignInProperties.sendOperationMessage("InvalidEnchantment", placeholders);
+                    MessageUtil.sendConsoleMessage("Console-Messages.Invalid-Enchantment", ConfigurationType.MESSAGES, placeholders);
                 }
             } catch (Exception ex) {
                 placeholders.put("{path}", configPath + "." + name);
-                LiteSignInProperties.sendOperationMessage("InvalidEnchantmentSetting", placeholders);
+                MessageUtil.sendConsoleMessage("Console-Messages.Invalid-Enchantment-Setting", ConfigurationType.MESSAGES, placeholders);
             }
         }
         is.setItemMeta(im);
@@ -474,7 +473,7 @@ public class SignInGUI
         } catch (Exception ex) {
             placeholders.put("{data}", name);
             placeholders.put("{path}", configPath + "." + name);
-            LiteSignInProperties.sendOperationMessage("InvalidCustomModelData", placeholders);
+            MessageUtil.sendConsoleMessage("Console-Messages.Invalid-Custom-Model-Data", ConfigurationType.MESSAGES, placeholders);
         }
         is.setItemMeta(im);
     }
@@ -493,7 +492,7 @@ public class SignInGUI
         } catch (Exception ex) {
             placeholders.put("{data}", name);
             placeholders.put("{path}", configPath + "." + name);
-            LiteSignInProperties.sendOperationMessage("InvalidItemModel", placeholders);
+            MessageUtil.sendConsoleMessage("Console-Messages.Invalid-Item-Model", ConfigurationType.MESSAGES, placeholders);
         }
         is.setItemMeta(im);
     }

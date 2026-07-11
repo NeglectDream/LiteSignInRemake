@@ -56,10 +56,11 @@ public interface DatabaseEngine
     public Connection getConnection();
     
     /**
-     * Throw SQL exception.
-     * @param exception
-     * @param path
-     * @param reconnect 
+     * Throw SQL exception and send corresponding console message.
+     * @param exception the exception to report
+     * @param path the kebab-case key under {@code Console-Messages} in Messages.yml
+     *             (e.g. {@code "Connection-Failed"}, {@code "Execute-Query-Failed"})
+     * @param reconnect whether to attempt reconnection after reporting
      */
     public void throwSQLException(Exception exception, String path, boolean reconnect);
     

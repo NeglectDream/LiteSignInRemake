@@ -10,7 +10,6 @@ import lombok.Setter;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.util.LiteSignInProperties;
 
 public class LiteSignInThread
     extends Thread
@@ -76,7 +75,7 @@ public class LiteSignInThread
         }
         taskThread = new LiteSignInThread("LiteSignIn-TaskThread", ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getDouble("Async-Thread-Settings.Task-Thread-Delay"));
 
-        LiteSignInProperties.sendOperationMessage("AsyncThreadStarted", MessageUtil.getDefaultPlaceholders());
+        MessageUtil.sendConsoleMessage("Console-Messages.Async-Thread-Started", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
         taskThread.start();
     }
     

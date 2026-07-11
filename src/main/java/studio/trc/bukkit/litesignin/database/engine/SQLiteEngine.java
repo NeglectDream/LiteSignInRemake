@@ -21,7 +21,6 @@ import studio.trc.bukkit.litesignin.database.DatabaseEngine;
 import studio.trc.bukkit.litesignin.database.DatabaseTable;
 import studio.trc.bukkit.litesignin.database.DatabaseType;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.util.LiteSignInProperties;
 
 public class SQLiteEngine 
     implements DatabaseEngine
@@ -51,7 +50,7 @@ public class SQLiteEngine
                 try {
                     Class.forName("org.sqlite.JDBC");
                 } catch (ClassNotFoundException ex) {
-                    throwSQLException(ex, "NoDriverFound", false);
+                    throwSQLException(ex, "No-Driver-Found", false);
                     ConfigurationUtil.getConfig(ConfigurationType.CONFIG).set("SQLite-Storage.Enabled", false);
                     return;
                 }
@@ -67,10 +66,10 @@ public class SQLiteEngine
             sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + folderPath + "/" + fileName);
             Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
             placeholders.put("{database}", "SQLite");
-            LiteSignInProperties.sendOperationMessage("SuccessfullyConnected", placeholders);
+            MessageUtil.sendConsoleMessage("Console-Messages.Successfully-Connected", ConfigurationType.MESSAGES, placeholders);
             initialize();
         } catch (IOException | SQLException ex) {
-            throwSQLException(ex, "ConnectionFailed", true);
+            throwSQLException(ex, "Connection-Failed", true);
         }
     }
 
@@ -81,9 +80,9 @@ public class SQLiteEngine
                 sqliteConnection.close();
                 Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
                 placeholders.put("{database}", "SQLite");
-                LiteSignInProperties.sendOperationMessage("Disconnected", placeholders);
+                MessageUtil.sendConsoleMessage("Console-Messages.Disconnected", ConfigurationType.MESSAGES, placeholders);
             } catch (SQLException ex) {
-                throwSQLException(ex, "ConnectionError", false);
+                throwSQLException(ex, "Connection-Error", false);
             }
         }
     }
@@ -110,7 +109,7 @@ public class SQLiteEngine
                 return statement.executeUpdate();
             }
         } catch (SQLException ex) {
-            throwSQLException(ex, "ExecuteUpdateFailed", true);
+            throwSQLException(ex, "Execute-Update-Failed", true);
             return 0;
         }
     }
@@ -129,7 +128,7 @@ public class SQLiteEngine
                 return statement.executeBatch();
             }
         } catch (SQLException ex) {
-            throwSQLException(ex, "ExecuteUpdateFailed", true);
+            throwSQLException(ex, "Execute-Update-Failed", true);
             return new int[0];
         }
     }
@@ -146,7 +145,7 @@ public class SQLiteEngine
             }
             return new SQLQuery(statement.executeQuery(), statement);
         } catch (SQLException ex) {
-            throwSQLException(ex, "ExecuteQueryFailed", true);
+            throwSQLException(ex, "Execute-Query-Failed", true);
             return null;
         }
     }
@@ -161,7 +160,7 @@ public class SQLiteEngine
         Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
         placeholders.put("{database}", "SQLite");
         placeholders.put("{error}", exception.getLocalizedMessage() != null ? exception.getLocalizedMessage() : "null");
-        LiteSignInProperties.sendOperationMessage(path, placeholders);
+        MessageUtil.sendConsoleMessage("Console-Messages." + path, ConfigurationType.MESSAGES, placeholders);
         try {
             if (reconnect && sqliteConnection != null && sqliteConnection.isClosed()) {
                 connect();
@@ -182,7 +181,7 @@ public class SQLiteEngine
                 statement.executeBatch();
             }
         } catch (SQLException ex) {
-            throwSQLException(ex, "InitializationFailed", true);
+            throwSQLException(ex, "Initialization-Failed", true);
         }
     }
     

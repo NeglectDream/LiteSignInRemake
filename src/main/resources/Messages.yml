@@ -265,3 +265,35 @@ Command-Messages:
         - '&6 总共签到天数: &e{total}'
         - '&8▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
 
+
+# ============================================================
+# 控制台运行时消息 (Console operation messages)
+# 这些消息仅发送到服务器控制台，用于反馈插件运行状态、
+# 数据库连接、配置加载与校验等运维信息。
+# ============================================================
+Console-Messages:
+    Properties-Loaded: '[LiteSignIn] &a默认消息已加载。'
+    Plugin-Listener-Registered: '[LiteSignIn] &6已启用 &e事件监听器 &6。'
+    Plugin-Command-Registered: '[LiteSignIn] &6已启用 &e命令监听器 &6。'
+    PlaceholderAPI-Not-Found: '{prefix}&c找不到 &ePlaceholderAPI &c， 已自动关闭该功能。'
+    Find-The-PlaceholderAPI: '{prefix}&a找到 &ePlaceholderAPI &a， 准备就绪。'
+    Async-Thread-Started: '{prefix}&a异步线程开始运行'
+    Async-Thread-Stopped: '{prefix}&a异步线程已停止'
+    Plugin-Enabled-Successfully: '{prefix}&a插件加载完成。'
+    Configuration-Loading-Error: '[LiteSignIn] &c无法加载配置文件 &e{file}&c， 正在尝试恢复默认配置文件...'
+    Configuration-Repair: '{prefix}&a已恢复默认配置文件。'
+    Successfully-Connected: '{prefix}&a成功连接到 &b{database} &a服务器.'
+    Connection-Failed: '{prefix}&c无法连接到 &b{database} &c数据库，错误: {error}.'
+    Connection-Error: '{prefix}&c数据库 &b{database} &c连接故障: {error}.'
+    No-Driver-Found: '{prefix}&c无法找到 &e{database} &c的驱动程序， 已关闭{database}连接.'
+    Initialization-Failed: '{prefix}&c数据库初始化失败，发生错误: {error}'
+    Disconnected: '{prefix}&a已断开 &b{database} &a数据库的连接。'
+    Execute-Query-Failed: '{prefix}&e查询数据失败， 发生错误: &c{error}'
+    Execute-Update-Failed: '{prefix}&e更新数据失败， 发生错误: &c{error}'
+    Loading-JSON-Component-Failed: '{prefix}&c无法加载JSON信息组件，原因: &6{exception}'
+    Invalid-Sound: '{prefix}&e无效的语音 &c{sound}&e，请检查你的RewardSettings.yml设置！ [{path}].'
+    Invalid-Sound-Setting: '{prefix}&c语音设置有误， 配置文件路径: RewardSettings.yml [{path}].'
+    Invalid-Enchantment: '{prefix}&e无效的附魔 &c{enchantment}&e，请检查你的GUISettings.yml设置！ [{path}].'
+    Invalid-Enchantment-Setting: '{prefix}&c附魔设置有误， 配置文件路径: GUISettings.yml [{path}].'
+    Invalid-Custom-Model-Data: '{prefix}&e无效的自定义模型数据 &c{data}&e，请检查你的GUISettings.yml设置！ [{path}].'
+    Invalid-Item-Model: '{prefix}&e无效的物品模型 &c{data}&e，请检查你的GUISettings.yml设置！ [{path}].'

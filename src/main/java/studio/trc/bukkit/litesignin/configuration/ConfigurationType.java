@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import lombok.Getter;
@@ -16,7 +17,6 @@ import org.bukkit.configuration.file.YamlConfiguration;
 
 import studio.trc.bukkit.litesignin.Main;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.util.LiteSignInProperties;
 
 public enum ConfigurationType
 {
@@ -89,7 +89,7 @@ public enum ConfigurationType
     }
 
     public boolean reloadConfig() {
-        try (InputStreamReader configFile = new InputStreamReader(new FileInputStream("plugins/LiteSignIn/" + fileName), LiteSignInProperties.getMessage("Charset"))) {
+        try (InputStreamReader configFile = new InputStreamReader(new FileInputStream("plugins/LiteSignIn/" + fileName), StandardCharsets.UTF_8)) {
             config.load(configFile);
             return true;
         } catch (IOException | InvalidConfigurationException ex) {
@@ -97,15 +97,15 @@ public enum ConfigurationType
             File file = new File("plugins/LiteSignIn/" + fileName);
             Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
             placeholders.put("{file}", fileName);
-            LiteSignInProperties.sendOperationMessage("ConfigurationLoadingError", placeholders);
+            MessageUtil.sendConsoleMessage("Console-Messages.Configuration-Loading-Error", ConfigurationType.MESSAGES, placeholders);
             if (oldFile.exists()) {
                 oldFile.delete();
             }
             file.renameTo(oldFile);
             saveResource();
-            try (InputStreamReader newConfig = new InputStreamReader(new FileInputStream(file), LiteSignInProperties.getMessage("Charset"))) {
+            try (InputStreamReader newConfig = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
                 config.load(newConfig);
-                LiteSignInProperties.sendOperationMessage("ConfigurationRepair", MessageUtil.getDefaultPlaceholders());
+                MessageUtil.sendConsoleMessage("Console-Messages.Configuration-Repair", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
             } catch (IOException | InvalidConfigurationException ex1) {
                 ex1.printStackTrace();
             }

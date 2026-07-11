@@ -43,11 +43,11 @@ public class PluginControl
                     PlaceholderAPIImpl.getInstance().register();
                 }
                 MessageUtil.setEnabledPAPI(true);
-                LiteSignInProperties.sendOperationMessage("FindThePlaceholderAPI", MessageUtil.getDefaultPlaceholders());
+                MessageUtil.sendConsoleMessage("Console-Messages.Find-The-PlaceholderAPI", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
             }
         } catch (Error ex) {
             MessageUtil.setEnabledPAPI(false);
-            LiteSignInProperties.sendOperationMessage("PlaceholderAPINotFound", MessageUtil.getDefaultPlaceholders());
+            MessageUtil.sendConsoleMessage("Console-Messages.PlaceholderAPI-Not-Found", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
         }
         Bukkit.getOnlinePlayers().stream().filter(ps -> PacketSignInMenuService.isOpening(ps.getUniqueId())).forEachOrdered(Menu::closeGUI);
         LiteSignInThread.initialize();

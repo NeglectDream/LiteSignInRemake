@@ -11,7 +11,7 @@ import studio.trc.bukkit.litesignin.event.Join;
 import studio.trc.bukkit.litesignin.packet.PacketSignInMenuService;
 import studio.trc.bukkit.litesignin.packet.PacketSignInPacketListener;
 import studio.trc.bukkit.litesignin.util.PluginControl;
-import studio.trc.bukkit.litesignin.util.LiteSignInProperties;
+import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
@@ -37,14 +37,13 @@ public class Main
     public void onEnable() {
         main = this;
 
-        LiteSignInProperties.reloadProperties();
+        // 配置优先加载：确保后续控制台消息能从 Messages.yml 正确读取
+        PluginControl.reload();
 
         registerCommandExecutor();
         registerEvent();
         registerPacketListener();
-        PluginControl.reload();
-        LiteSignInProperties.sendOperationMessage("PluginEnabledSuccessfully", MessageUtil.getDefaultPlaceholders());
-
+        MessageUtil.sendConsoleMessage("Console-Messages.Plugin-Enabled-Successfully", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
     }
 
     @Override
@@ -55,7 +54,7 @@ public class Main
         }
         PacketSignInMenuService.shutdown();
         LiteSignInThread.getTaskThread().setRunning(false);
-        LiteSignInProperties.sendOperationMessage("AsyncThreadStopped", MessageUtil.getDefaultPlaceholders());
+        MessageUtil.sendConsoleMessage("Console-Messages.Async-Thread-Stopped", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
         SQLiteStorage.cache.values().stream().forEach(SQLiteStorage::saveData);
         if (SQLiteEngine.getInstance() != null) {
             SQLiteEngine.getInstance().disconnect();
@@ -70,7 +69,7 @@ public class Main
         PluginManager pm = Bukkit.getPluginManager();
         pm.registerEvents(new Join(), Main.getInstance());
         pm.registerEvents(new Quit(), Main.getInstance());
-        LiteSignInProperties.sendOperationMessage("PluginListenerRegistered");
+        MessageUtil.sendConsoleMessage("Console-Messages.Plugin-Listener-Registered", ConfigurationType.MESSAGES);
     }
     
     private void registerCommandExecutor() {
@@ -81,7 +80,7 @@ public class Main
         for (SignInSubCommandType subCommandType : SignInSubCommandType.values()) {
             SignInCommand.getSubCommands().put(subCommandType.getSubCommandName(), subCommandType.getSubCommand());
         }
-        LiteSignInProperties.sendOperationMessage("PluginCommandRegistered");
+        MessageUtil.sendConsoleMessage("Console-Messages.Plugin-Command-Registered", ConfigurationType.MESSAGES);
     }
 
     private void registerPacketListener() {
