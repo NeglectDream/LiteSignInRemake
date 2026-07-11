@@ -35,12 +35,7 @@ public enum SignInSubCommandType
      * /signin info
      */
     INFO("info", new InfoCommand(), "Info"),
-    
-    /**
-     * /signin database
-     */
-    DATABASE("database", new DatabaseCommand(), "Database"),
-    
+
     /**
      * /signin leaderboard
      */

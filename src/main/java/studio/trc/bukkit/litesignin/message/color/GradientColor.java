@@ -5,7 +5,6 @@ import java.util.List;
 
 import lombok.Getter;
 
-import net.md_5.bungee.api.ChatColor;
 import studio.trc.bukkit.litesignin.message.tag.TagContentExtractor;
 import studio.trc.bukkit.litesignin.message.tag.TagContentInfo;
 
@@ -24,14 +23,14 @@ public class GradientColor
             if (tagContent.getAttribute() == null) continue;
             String[] colorList = tagContent.getAttribute().split(":", -1);
             String text = tagContent.getContent();
-            ChatColor[] colors = makeGradient(colorList, text.length());
+            String[] colors = makeGradient(colorList, text.length());
             content = tagContent.replace(content, (tagContent.getCloseTag() != null ? "<previousColor>" : "") + ColorUtils.coloring(text, colors, ColorUtils.getPreviousTypeface(original, tagContent.getStartPosition())) + (tagContent.getCloseTag() != null ? "</previousColor>" : ""));
         }
         return content;
     }
     
-    public static ChatColor[] makeGradient(String[] containsColors, int depth) {
-        ChatColor[] result = new ChatColor[depth];
+    public static String[] makeGradient(String[] containsColors, int depth) {
+        String[] result = new String[depth];
         Color[] colors = new Color[depth];
         if (depth == 0 || containsColors.length == 0) return result;
         if (containsColors.length == 1) {
@@ -66,11 +65,7 @@ public class GradientColor
             }
         }
         for (int i = 0;i < result.length;i++) {
-            if (ColorUtils.isSupportsRGBVersions()) {
-                result[i] = ChatColor.of(colors[i]);
-            } else {
-                result[i] = ChatColor.getByChar(ColorUtils.toNearestColor(colors[i]));
-            }
+            result[i] = ColorUtils.toSectionHex(colors[i]);
         }
         return result;
     }

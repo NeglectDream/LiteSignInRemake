@@ -5,8 +5,6 @@ import java.util.List;
 
 import lombok.Getter;
 
-import net.md_5.bungee.api.ChatColor;
-
 import studio.trc.bukkit.litesignin.message.tag.TagContentExtractor;
 import studio.trc.bukkit.litesignin.message.tag.TagContentInfo;
 import studio.trc.bukkit.litesignin.util.LiteSignInUtils;
@@ -42,8 +40,8 @@ public class TransitionColor
      * @param ratio The ratio range in [0, 1]
      * @return 
      */
-    public static ChatColor makeTransition(String[] containsColors, float ratio) {
-        if (containsColors.length == 0) return ChatColor.getByChar('r');
+    public static String makeTransition(String[] containsColors, float ratio) {
+        if (containsColors.length == 0) return "§r";
         Color color;
         if (ratio <= 0 || containsColors.length == 1) {//When ratio=0 or there is only one color, take the first color in the color list as the return object
             color = ColorUtils.getColor(containsColors[0]);
@@ -61,10 +59,6 @@ public class TransitionColor
                 (int) (c1.getBlue() + localRatio * (c2.getBlue() - c1.getBlue()))
             );
         }
-        if (ColorUtils.isSupportsRGBVersions()) {
-            return ChatColor.of(color);
-        } else {
-            return ChatColor.getByChar(ColorUtils.toNearestColor(color));
-        }
+        return ColorUtils.toSectionHex(color);
     }
 }

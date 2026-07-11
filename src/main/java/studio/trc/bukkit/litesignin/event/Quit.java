@@ -10,10 +10,9 @@ import studio.trc.bukkit.litesignin.api.Storage;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.database.storage.SQLiteStorage;
-import studio.trc.bukkit.litesignin.database.storage.MySQLStorage;
+import studio.trc.bukkit.litesignin.packet.PacketSignInMenuService;
 import studio.trc.bukkit.litesignin.thread.LiteSignInThread;
 import studio.trc.bukkit.litesignin.util.OnlineTimeRecord;
-import studio.trc.bukkit.litesignin.util.PluginControl;
 
 public class Quit
     implements Listener
@@ -24,13 +23,10 @@ public class Quit
         if (ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Online-Duration-Condition.Enabled")) {
             OnlineTimeRecord.savePlayerOnlineTime(player);
         }
+        PacketSignInMenuService.close(player);
         LiteSignInThread.runTask(() -> {
             Storage.getPlayer(player).saveData();
-            if (PluginControl.useMySQLStorage()) {
-                MySQLStorage.cache.remove(player.getUniqueId());
-            } else if (PluginControl.useSQLiteStorage()) {
-                SQLiteStorage.cache.remove(player.getUniqueId());
-            }
+            SQLiteStorage.cache.remove(player.getUniqueId());
         });
     }
 }

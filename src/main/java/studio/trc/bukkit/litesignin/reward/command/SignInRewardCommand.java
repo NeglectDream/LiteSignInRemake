@@ -34,12 +34,12 @@ public class SignInRewardCommand
         String processedCommand = MessageUtil.replacePlaceholders(player, command, placeholders);
         switch (type) {
             case PLAYER: {
-                BukkitSchedulerManager.runBukkitTask(() -> player.performCommand(processedCommand), 0, player);
+                BukkitSchedulerManager.runBukkitTask(() -> player.performCommand(processedCommand), 0);
                 break;
             }
             case OP: {
                 if (player.isOp()) {
-                    BukkitSchedulerManager.runBukkitTask(() -> player.performCommand(processedCommand), 0, player);
+                    BukkitSchedulerManager.runBukkitTask(() -> player.performCommand(processedCommand), 0);
                 } else {
                     BukkitSchedulerManager.runBukkitTask(() -> {
                         player.setOp(true);
@@ -50,12 +50,12 @@ public class SignInRewardCommand
                         } finally {
                             player.setOp(false);
                         }
-                    }, 0,player);
+                    }, 0);
                 }
                 break;
             }
             case SERVER: {
-                BukkitSchedulerManager.runBukkitTask(() -> Main.getInstance().getServer().dispatchCommand(Bukkit.getConsoleSender(), processedCommand), 0, null);
+                BukkitSchedulerManager.runBukkitTask(() -> Main.getInstance().getServer().dispatchCommand(Bukkit.getConsoleSender(), processedCommand), 0);
                 break;
             }
         }

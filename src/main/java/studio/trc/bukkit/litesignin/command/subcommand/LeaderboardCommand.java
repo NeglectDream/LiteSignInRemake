@@ -21,7 +21,6 @@ import studio.trc.bukkit.litesignin.message.MessageUtil;
 import studio.trc.bukkit.litesignin.queue.SignInQueue;
 import studio.trc.bukkit.litesignin.queue.SignInQueueElement;
 import studio.trc.bukkit.litesignin.thread.LiteSignInThread;
-import studio.trc.bukkit.litesignin.util.PluginControl;
 import studio.trc.bukkit.litesignin.util.SignInDate;
 import studio.trc.bukkit.litesignin.util.LiteSignInUtils;
 
@@ -49,10 +48,6 @@ public class LeaderboardCommand
             if (date != null) {
                 if (!date.equals(today)) {
                     if (!LiteSignInUtils.hasCommandPermission(sender, "LeaderBoard.Designated-Date", true)) {
-                        return;
-                    }
-                    if (!PluginControl.useMySQLStorage() && !PluginControl.useSQLiteStorage()) {
-                        MessageUtil.sendCommandMessage(sender, "LeaderBoard.Non-Database-mode");
                         return;
                     }
                     int page = 1;
@@ -83,10 +78,6 @@ public class LeaderboardCommand
             if (date != null) {
                 if (!date.equals(today)) {
                     if (!LiteSignInUtils.hasCommandPermission(sender, "LeaderBoard.Designated-Date", true)) {
-                        return;
-                    }
-                    if (!PluginControl.useMySQLStorage() && !PluginControl.useSQLiteStorage()) {
-                        MessageUtil.sendCommandMessage(sender, "LeaderBoard.Non-Database-mode");
                         return;
                     }
                     int page;

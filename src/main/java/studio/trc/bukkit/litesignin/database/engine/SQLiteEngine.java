@@ -51,8 +51,9 @@ public class SQLiteEngine
                 try {
                     Class.forName("org.sqlite.JDBC");
                 } catch (ClassNotFoundException ex) {
-                    throwSQLException(ex, "NoDriverFound", true);
+                    throwSQLException(ex, "NoDriverFound", false);
                     ConfigurationUtil.getConfig(ConfigurationType.CONFIG).set("SQLite-Storage.Enabled", false);
+                    return;
                 }
             }
             File databaseFolder = new File(folderPath);
@@ -60,7 +61,7 @@ public class SQLiteEngine
                 databaseFolder.mkdirs();
             }
             File databaseFile = new File(databaseFolder, fileName);
-            if (databaseFile.exists()) {
+            if (!databaseFile.exists()) {
                 databaseFile.createNewFile();
             }
             sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + folderPath + "/" + fileName);
@@ -162,7 +163,7 @@ public class SQLiteEngine
         placeholders.put("{error}", exception.getLocalizedMessage() != null ? exception.getLocalizedMessage() : "null");
         LiteSignInProperties.sendOperationMessage(path, placeholders);
         try {
-            if (reconnect && sqliteConnection.isClosed()) {
+            if (reconnect && sqliteConnection != null && sqliteConnection.isClosed()) {
                 connect();
             }
         } catch (SQLException ex) {

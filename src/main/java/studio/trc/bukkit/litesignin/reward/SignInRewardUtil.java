@@ -128,18 +128,14 @@ public abstract class SignInRewardUtil
             if (config.contains("Manual-Settings." + itemdata[0] + ".Item")) {
                 ItemStack is;
                 try {
-                    if (config.contains("Manual-Settings." + itemdata[0] + ".Data")) {
-                        is = new ItemStack(Material.valueOf(config.getString("Manual-Settings." + itemdata[0] + ".Item").toUpperCase()), 1, (short) ConfigurationUtil.getConfig(ConfigurationType.REWARD_SETTINGS).getInt("Reward-Items." + itemdata[0] + ".Data"));
-                    } else {
-                        is = new ItemStack(Material.valueOf(config.getString("Manual-Settings." + itemdata[0] + ".Item").toUpperCase()), 1);
-                    }
+                    is = new ItemStack(Material.valueOf(config.getString("Manual-Settings." + itemdata[0] + ".Item").toUpperCase()), 1);
                 } catch (IllegalArgumentException ex2) {
                     return null;
                 }
                 if (config.get("Manual-Settings." + itemdata[0] + ".Head-Owner") != null) {
                     Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
                     placeholders.put("{player}", player.getName());
-                    PluginControl.setHead(is, MessageUtil.replacePlaceholders(player, ConfigurationUtil.getConfig(ConfigurationType.GUI_SETTINGS).getString("Manual-Settings." + itemdata[0] + ".Head-Owner"), placeholders));
+                    PluginControl.setHead(is, MessageUtil.replacePlaceholders(player, config.getString("Manual-Settings." + itemdata[0] + ".Head-Owner"), placeholders));
                 }
                 ItemMeta im = is.getItemMeta();
                 if (config.contains("Manual-Settings." + itemdata[0] + ".Lore")) {
@@ -215,13 +211,7 @@ public abstract class SignInRewardUtil
                 String[] data = name.split(":");
                 boolean invalid = true;
                 for (Enchantment enchant : Enchantment.values()) {
-                    String enchantName;
-                    try {
-                        enchantName = enchant.getKey().getKey();
-                    } catch (Throwable ex) {
-                        enchantName = enchant.getName();
-                    }
-                    if (enchantName.equalsIgnoreCase(data[0])) {
+                    if (enchant.getKey().getKey().equalsIgnoreCase(data[0]) || enchant.getKey().toString().equalsIgnoreCase(data[0])) {
                         try {
                             im.addEnchant(enchant, Integer.valueOf(data[1]), true);
                             invalid = false;

@@ -1,10 +1,6 @@
 #命令前缀
 Prefix: '&bLite&3SignIn &f&l>>> '
 
-#插件语言
-#可用: Simplified-Chinese, Traditional-Chinese, Japanese, English
-Language: Simplified-Chinese
-
 #PlaceholderAPI设置
 PlaceholderAPI:
     #是否使用
@@ -65,10 +61,6 @@ GUI-Settings:
         #最低月份
         Minimum-Month: 11
 
-#木牌签到脚本
-#启用后将生成WoodSignSettings.yml文件，请在该文件中按照注释的帮助进行编辑。
-Wood-Signs-Script: false
-
 #异步线程的设置
 #若不清楚这什么是异步线程，请不要修改这个选项！
 Async-Thread-Settings: 
@@ -105,44 +97,8 @@ Retroactive-Card:
         #你可以在CustomItems.yml文件中编辑它。
         CustomItem: 'RetroactiveCard'
 
-#MySQL 数据库设置
-MySQL-Storage:
-    Enabled: false
-    #主机名
-    Hostname: localhost
-    #端口
-    Port: 3306
-    #用户名
-    Username: 'root'
-    #密码
-    Password: 'password'
-    #数据库名称
-    Database: 'litesignin'
-    #数据表名称
-    Table-Name: playerdata
-    #玩家数据刷新间隔时间（秒）。-1为无，仅在进入服务器时刷新数据（建议在单服务端使用MySQL的情况下才这么做）
-    Refresh-Interval: 5
-    #连接超时时间
-    Wait-Timeout: 18000
-    #自动部署模式
-    #该模式下在连接到MySQL后会自动定位/创建目标数据库
-    #适合只会部署但是不会操作MySQL的人使用
-    #PS：若服务器无法定位到目标数据库，则需要关闭此选项手动创建数据库！
-    Automatic-Deploy-Mode: true
-    #连接参数，如果你不是一名开发者，并且不熟知JDBC，请不要修改它
-    Options:
-        useSSL: false
-        useUnicode: true
-        allowMultiQueries: true
-        allowPublicKeyRetrieval: true
-        characterEncoding: 'utf8'
-        autoReconnect: true
-    
 #SQLite 数据库设置
-#储存模式优先级: Yaml < SQLite < MySQL
 SQLite-Storage:
-    #默认为启用，若关闭则转为Yaml储存格式
-    Enabled: true
     #数据库文件名
     Database-File: 'Database.db'
     #数据库文件夹路径
@@ -151,30 +107,7 @@ SQLite-Storage:
     Refresh-Interval: 5
     #数据表名称
     Table-Name: playerdata
-    
-#数据管理设置
-Database-Management:
-    #备份
-    Backup:
-        #是否允许使用备份功能
-        Enabled: true
-        #是否开启自动备份（每一次服务器关闭时进行）
-        Auto-Backup: false
-        #备份文件夹路径
-        Backup-Folder-Path: 'plugins/LiteSignIn/Backup/'
-        #备份文件名称
-        Backup-File: 'Backup-{time}'
-        #时间格式
-        Time-Format: 'yyyy-MM-dd-HH-mm-ss'
-    #回档
-    Rollback:
-        #是否允许使用回档功能
-        Enabled: true
-        #备份文件夹路径（将从此处选择备份文件进行回档）
-        Backup-Folder-Path: 'plugins/LiteSignIn/Backup/'
-        #执行回档前，是否先进行备份
-        Rollback-With-Backup: true
-    
+
 #签到奖励任务顺序
 #默认顺序依次是 物品奖励 -> 命令执行 -> 信息发送 -> 广播信息-> 播放声音
 Reward-Task-Sequence:
@@ -197,10 +130,6 @@ Permissions:
         Hold:
             Permission: signin.retroactive-card.hold
             Default: true
-    #插件更新检测相关权限
-    Updater: 
-        Permission: signin.updater
-        Default: false
     #登入服务器时自动签到的权限
     Join-Auto-SignIn:
         Default: false
@@ -264,12 +193,6 @@ Permissions:
         Database:
             Permission: signin.command.database
             Default: false
-            Backup:
-                Permission: signin.command.database.backup
-                Default: false
-            Rollback:
-                Permission: signin.command.database.rollback
-                Default: false
         LeaderBoard:
             Permission: signin.command.leaderboard
             Default: true
@@ -279,12 +202,3 @@ Permissions:
         Reward:
             Permission: signin.command.reward
             Default: false
-
-#是否检查更新
-#仅在启动服务器时运行，将自动检测插件的最新版本及信息，并汇报给控制台及有拥有对应权限的玩家
-#此功能并不会造成服务器产生过多流量（每次检测产生约不到1kb网络流量）
-Updater: true
-    
-#是否启用Metrics
-#详见https://bstats.org/plugin/bukkit/LiteSignIn/11849
-Metrics: true

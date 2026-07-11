@@ -18,9 +18,6 @@ public class ConfigurationUtil
     
     public static void reloadConfig() {
         for (ConfigurationType type : ConfigurationType.values()) {
-            if (type.equals(ConfigurationType.WOOD_SIGN_SETTINGS)) {
-                continue; //Because has a dedicated loading function
-            }
             reloadConfig(type);
         }
     }

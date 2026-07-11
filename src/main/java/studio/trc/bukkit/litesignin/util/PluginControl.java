@@ -1,13 +1,10 @@
 package studio.trc.bukkit.litesignin.util;
 
-import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -17,40 +14,29 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.plugin.Plugin;
+import org.bukkit.inventory.meta.SkullMeta;
 
 import studio.trc.bukkit.litesignin.Main;
 import studio.trc.bukkit.litesignin.configuration.RobustConfiguration;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
-import studio.trc.bukkit.litesignin.database.storage.MySQLStorage;
-import studio.trc.bukkit.litesignin.database.storage.YamlStorage;
 import studio.trc.bukkit.litesignin.database.storage.SQLiteStorage;
 import studio.trc.bukkit.litesignin.database.engine.SQLiteEngine;
-import studio.trc.bukkit.litesignin.database.engine.MySQLEngine;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
 import studio.trc.bukkit.litesignin.message.color.ColorUtils;
 import studio.trc.bukkit.litesignin.event.Menu;
+import studio.trc.bukkit.litesignin.packet.PacketSignInMenuService;
 import studio.trc.bukkit.litesignin.thread.LiteSignInThread;
 import studio.trc.bukkit.litesignin.queue.SignInQueue;
-import studio.trc.bukkit.litesignin.util.woodsignscript.WoodSignUtil;
 
 public class PluginControl
 {
     public static void reload() {
         ConfigurationUtil.reloadConfig();
         MessageUtil.loadPlaceholders();
-        MessageUtil.setAdventureAvailable();
-        YamlStorage.cache.clear();
         SQLiteStorage.cache.clear();
-        MySQLStorage.cache.clear();
-        if (useMySQLStorage()) {
-            reloadMySQL();
-        } else if (useSQLiteStorage()) {
-            reloadSQLite();
-        } else {
-            SignInQueue.getInstance().loadQueue();
-        }
+        reloadSQLite();
+        SignInQueue.getInstance().loadQueue();
         try {
             if (ConfigurationType.CONFIG.getRobustConfig().getBoolean("PlaceholderAPI.Enabled")) {
                 if (!PlaceholderAPIImpl.getInstance().isRegistered()) {
@@ -63,38 +49,10 @@ public class PluginControl
             MessageUtil.setEnabledPAPI(false);
             LiteSignInProperties.sendOperationMessage("PlaceholderAPINotFound", MessageUtil.getDefaultPlaceholders());
         }
-        Bukkit.getOnlinePlayers().stream().filter(ps -> Menu.menuOpening.containsKey(ps.getUniqueId())).forEachOrdered(Player::closeInventory);
+        Bukkit.getOnlinePlayers().stream().filter(ps -> PacketSignInMenuService.isOpening(ps.getUniqueId())).forEachOrdered(Menu::closeGUI);
         LiteSignInThread.initialize();
-        if (enableSignScript()) {
-            WoodSignUtil.loadScripts();
-            WoodSignUtil.loadSigns();
-            WoodSignUtil.scan();
-            Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
-            placeholders.put("{scripts}", String.valueOf(WoodSignUtil.getWoodSignScripts().size()));
-            placeholders.put("{signs}", String.valueOf(WoodSignUtil.getAllScriptedSign().size()));
-            LiteSignInProperties.sendOperationMessage("WoodSignScriptLoaded", placeholders);
-        }
     }
-    
-    public static void reloadMySQL() {
-        RobustConfiguration config = ConfigurationUtil.getConfig(ConfigurationType.CONFIG);
-        Map<String, String> jdbcOptions = new HashMap();
-        config.getConfigurationSection("MySQL-Storage.Options").getKeys(false).stream().forEach(option -> {
-            jdbcOptions.put(option, config.getString("MySQL-Storage.Options." + option));
-        });
-        if (MySQLEngine.getInstance() != null) {
-            MySQLEngine.getInstance().disconnect();
-        }
-        MySQLEngine.setInstance(new MySQLEngine(
-            config.getString("MySQL-Storage.Hostname"),
-            config.getInt("MySQL-Storage.Port"),
-            config.getString("MySQL-Storage.Username"),
-            config.getString("MySQL-Storage.Password"),
-            jdbcOptions)
-        );
-        MySQLEngine.getInstance().connect();
-    }
-    
+
     public static void reloadSQLite() {
         RobustConfiguration config = ConfigurationUtil.getConfig(ConfigurationType.CONFIG);
         if (SQLiteEngine.getInstance() != null) {
@@ -103,43 +61,28 @@ public class PluginControl
         SQLiteEngine.setInstance(new SQLiteEngine(config.getString("SQLite-Storage.Database-Path"), config.getString("SQLite-Storage.Database-File")));
         SQLiteEngine.getInstance().connect();
     }
-    
+
     public static void savePlayersData() {
-        YamlStorage.cache.values().stream().forEach(YamlStorage::saveData);
-        MySQLStorage.cache.values().stream().forEach(MySQLStorage::saveData);
         SQLiteStorage.cache.values().stream().forEach(SQLiteStorage::saveData);
     }
     
     public static void hideEnchants(ItemMeta im) {
-        if (Bukkit.getBukkitVersion().startsWith("1.7")) {
-            return;
-        }
         im.addItemFlags(ItemFlag.HIDE_ENCHANTS);
     }
     
     public static void setHead(ItemStack is, String name) {
-        if (name == null) return;
-        Player player = Bukkit.getPlayer(name);
-        String playerName;
-        UUID uuid;
-        if (player != null) {
-            uuid = player.getUniqueId();
-            playerName = player.getName();
-        } else {
-            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
-            if (offlinePlayer != null) {
-                uuid = offlinePlayer.getUniqueId();
-                playerName = offlinePlayer.getName();
-            } else {
-                return;
-            }
-        }
+        if (name == null || !(is.getItemMeta() instanceof SkullMeta)) return;
+        OfflinePlayer owner = Bukkit.getOfflinePlayer(name);
+        UUID uuid = owner.getUniqueId();
         String texture = SkullManager.getBase64Meta().get(uuid);
         if (texture != null) {
             is.setItemMeta(SkullManager.getHeadWithTextures(texture).getItemMeta());
-        } else {
-            LiteSignInThread.runTask(() -> SkullManager.refreshTextureByDefaultMethod(uuid, playerName));
+            return;
         }
+        SkullMeta meta = (SkullMeta) is.getItemMeta();
+        meta.setOwningPlayer(owner);
+        is.setItemMeta(meta);
+        LiteSignInThread.runTask(() -> SkullManager.refreshTexture(uuid, owner.getName() != null ? owner.getName() : name));
     }
     
     public static int getRetroactiveCardQuantityRequired() {
@@ -158,66 +101,42 @@ public class PluginControl
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getDouble("Retroactive-Card.Intervals");
     }
     
-    public static double getMySQLRefreshInterval() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getDouble("MySQL-Storage.Refresh-Interval");
-    }
-    
     public static double getSQLiteRefreshInterval() {
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getDouble("SQLite-Storage.Refresh-Interval");
     }
-    
+
     public static boolean usePlaceholderAPI() {
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("PlaceholderAPI.Enabled");
     }
-    
-    public static boolean useMySQLStorage() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("MySQL-Storage.Enabled");
-    }
-    
-    public static boolean useSQLiteStorage() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("SQLite-Storage.Enabled");
-    }
-    
+
     public static boolean enableSignInRanking() {
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Enable-Sign-In-Ranking");
     }
-    
+
     public static boolean enableSignInGUI() {
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("GUI-Settings.Enabled");
     }
-    
+
     public static boolean enableGUILimitDate() {
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("GUI-Settings.Limit-Date.Enabled");
     }
-     
-    public static boolean enableRetroactiveCard() {
+
+     public static boolean enableRetroactiveCard() {
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Retroactive-Card.Enabled");
     }
-     
-    public static boolean enableRetroactiveCardRequiredItem() {
+
+     public static boolean enableRetroactiveCardRequiredItem() {
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Retroactive-Card.Required-Item.Enabled");
     }
-    
+
     public static boolean enableJoinEvent() {
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Join-Event.Enabled");
     }
-    
+
     public static boolean autoSignIn() {
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Join-Event.Auto-SignIn");
     }
-    
-    public static boolean enableUpdater() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Updater");
-    }
-    
-    public static boolean enableMetrics() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Metrics");
-    }
-    
-    public static boolean enableSignScript() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Wood-Signs-Script");
-    }
-    
+
     public static SignInDate getRetroactiveCardMinimumDate() {
         return SignInDate.getInstance(ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getString("Retroactive-Card.Minimum-Date"));
     }
@@ -235,11 +154,7 @@ public class PluginControl
         if (ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).get("Manual-Settings." + itemName + ".Item") != null) {
             ItemStack is;
             try {
-                if (ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).get("Manual-Settings." + itemName + ".Data") != null) {
-                    is = new ItemStack(Material.valueOf(ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getString("Manual-Settings." + itemName + ".Item").toUpperCase()), 1, (short) ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getInt("Manual-Settings." + itemName + ".Data"));
-                } else {
-                    is = new ItemStack(Material.valueOf(ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getString("Manual-Settings." + itemName + ".Item").toUpperCase()), 1);
-                }
+                is = new ItemStack(Material.valueOf(ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getString("Manual-Settings." + itemName + ".Item").toUpperCase()), 1);
             } catch (IllegalArgumentException ex2) {
                 return null;
             }
@@ -258,7 +173,7 @@ public class PluginControl
                 for (String name : ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getStringList("Manual-Settings." + itemName + ".Enchantment")) {
                     String[] data = name.split(":");
                     for (Enchantment enchant : Enchantment.values()) {
-                        if (enchant.getName().equalsIgnoreCase(data[0])) {
+                        if (enchant.getKey().getKey().equalsIgnoreCase(data[0]) || enchant.getKey().toString().equalsIgnoreCase(data[0])) {
                             try {
                                 im.addEnchant(enchant, Integer.valueOf(data[1]), true);
                             } catch (NumberFormatException ex) {}
@@ -304,24 +219,5 @@ public class PluginControl
             }
         } catch (NumberFormatException ex) {}
         return 0;
-    }
-
-    private static long backupFilesAcquisitionTime = 0;
-    private static List<String> backupFiles = new ArrayList<>();
-    
-    public static List<String> getBackupFiles() {
-        if (System.currentTimeMillis() - backupFilesAcquisitionTime <= 5000) {
-            return backupFiles;
-        }
-        List<String> list = new ArrayList<>();
-        File folder = new File(ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getString("Database-Management.Rollback.Backup-Folder-Path"));
-        if (!folder.exists()) return list;
-        File[] files = folder.listFiles();
-        for (File f : files) {
-            list.add(f.getName());
-        }
-        backupFiles = list;
-        backupFilesAcquisitionTime = System.currentTimeMillis();
-        return list;
     }
 }

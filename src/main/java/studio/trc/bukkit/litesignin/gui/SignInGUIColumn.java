@@ -26,7 +26,7 @@ public class SignInGUIColumn
      */
     public SignInGUIColumn(ItemStack is, int key, SignInDate date, KeyType keyType) {
         this.key = key;
-        this.is = is;
+        this.is = is != null ? is.clone() : null;
         this.date = date;
         this.keyType = keyType;
         isKey = true;
@@ -40,7 +40,7 @@ public class SignInGUIColumn
      */
     public SignInGUIColumn(ItemStack is, int key, String buttonName) {
         this.key = key;
-        this.is = is;
+        this.is = is != null ? is.clone() : null;
         this.buttonName = buttonName;
         isKey = false;
     }
@@ -62,7 +62,7 @@ public class SignInGUIColumn
     }
   
     public ItemStack getItemStack() {
-        return is;
+        return is != null ? is.clone() : null;
     }
     
     public KeyType getKeyType() {

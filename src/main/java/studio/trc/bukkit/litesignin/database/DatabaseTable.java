@@ -66,7 +66,7 @@ public enum DatabaseTable
     }
     
     public String getDisplayName() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getString("MySQL-Storage.Table-Name");
+        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getString("SQLite-Storage.Table-Name");
     }
     
     private String getPrimaryKeysSyntax() {

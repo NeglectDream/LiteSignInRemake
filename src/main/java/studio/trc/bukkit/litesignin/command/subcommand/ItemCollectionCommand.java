@@ -8,11 +8,7 @@ import java.util.stream.Collectors;
 
 import lombok.Getter;
 
-import net.md_5.bungee.api.chat.BaseComponent;
-import net.md_5.bungee.api.chat.TextComponent;
-
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -20,7 +16,6 @@ import org.bukkit.inventory.ItemStack;
 import studio.trc.bukkit.litesignin.command.SignInSubCommand;
 import studio.trc.bukkit.litesignin.command.SignInSubCommandType;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.nms.NMSManager;
 import studio.trc.bukkit.litesignin.util.AdventureUtils;
 import studio.trc.bukkit.litesignin.util.CustomItem;
 import studio.trc.bukkit.litesignin.util.LiteSignInUtils;
@@ -96,26 +91,7 @@ public class ItemCollectionCommand
             placeholders.put("{amount}", String.valueOf(itemList.size()));
             MessageUtil.getMessageList("Command-Messages.ItemCollection.List.Messages").stream().forEach(text -> {
                 if (text.toLowerCase().contains("%list%")) {
-                    if (MessageUtil.useAdventure()) {
-                        MessageUtil.sendAdventureMessage(sender, text, placeholders, AdventureUtils.getItemDisplay(itemList));
-                    } else {
-                        String[] splitMessage = text.split("%list%");
-                        List<BaseComponent> message = new ArrayList<>();
-                        List<BaseComponent> components = new ArrayList<>();
-                        for (int i = 0;i < itemList.size();i++) {
-                            components.add(NMSManager.getBungeeJSONItemStack(itemList.get(i).getItemStack()));
-                            if (i != itemList.size() - 1) {
-                                components.add(new TextComponent(", "));
-                            }
-                        }
-                        for (int i = 0;i < splitMessage.length;i++) {
-                            message.add(new TextComponent(MessageUtil.replacePlaceholders(sender, splitMessage[i], placeholders)));
-                            if (i < splitMessage.length - 1 || text.endsWith("%list%")) {
-                                message.addAll(components);
-                            }
-                        }
-                        MessageUtil.sendBungeeJSONMessage(sender, message);
-                    }
+                    MessageUtil.sendAdventureMessage(sender, text, placeholders, AdventureUtils.getItemDisplay(itemList));
                 } else {
                     MessageUtil.sendMessage(sender, text, placeholders);
                 }
@@ -135,8 +111,8 @@ public class ItemCollectionCommand
         } else if (args.length >= 3) {
             Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
             Player player = (Player) sender;
-            ItemStack is = player.getItemInHand();
-            if (is == null && is.getType().equals(Material.AIR)) {
+            ItemStack is = player.getInventory().getItemInMainHand();
+            if (is == null || is.getType().isAir()) {
                 MessageUtil.sendCommandMessage(sender, "ItemCollection.Add.Doesnt-Have-Item-In-Hand");
             } else if (CustomItem.addItemAsCollection(is, args[2])) {
                 placeholders.put("{name}", args[2]);

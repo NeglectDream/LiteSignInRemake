@@ -8,10 +8,6 @@ import java.util.Map;
 
 import lombok.Getter;
 
-import net.md_5.bungee.api.ChatColor;
-
-import org.bukkit.Bukkit;
-
 import studio.trc.bukkit.litesignin.message.tag.TagContentExtractor;
 import studio.trc.bukkit.litesignin.message.tag.TagContentInfo;
 
@@ -91,46 +87,30 @@ public class ColorUtils
     }
     
     /**
-     * Get the closest classic color to it
-     * @param color java.awt.Color instance
-     * @return Hex color -> Classic color
+     * Converts an RGB color to Minecraft's legacy section hex sequence.
+     * Adventure's legacy serializer keeps this format working for existing configs.
+     * @param color RGB color
+     * @return section-coded hex color, e.g. §x§f§f§0§0§0§0
      */
-    public static char toNearestColor(Color color) {
-        double min = -1;
-        char result = 'r';
-        for (Color targetColor : colorRGBValues.keySet()) {
-            double redDistance = Math.pow(targetColor.getRed() - color.getRed(), 2);
-            double greenDistance = Math.pow(targetColor.getGreen() - color.getGreen(), 2);
-            double blueDistance = Math.pow(targetColor.getBlue() - color.getBlue(), 2);
-            double distance = Math.abs(Math.sqrt(redDistance + greenDistance + blueDistance));
-            if (min == -1 || distance < min) {
-                min = distance;
-                result = colorRGBValues.get(targetColor);
-            }
+    public static String toSectionHex(Color color) {
+        String hex = String.format("%06x", color.getRGB() & 0xFFFFFF);
+        StringBuilder builder = new StringBuilder("§x");
+        for (char character : hex.toCharArray()) {
+            builder.append('§').append(character);
         }
-        return result;
+        return builder.toString();
     }
-    
+
     /**
-     * Get the closest classic color to it
-     * @param hexadecimalColor String color
-     * @return Hex color -> Classic color
+     * Converts a #RRGGBB string to Minecraft's legacy section hex sequence.
+     * @param hexadecimalColor color string including leading '#'
+     * @return section-coded hex color, or reset if the input is invalid
      */
-    public static char toNearestColor(String hexadecimalColor) {
-        if (isHexadecimalSequence(hexadecimalColor, 1, 6)) {
-            return toNearestColor(new Color(Integer.parseInt(hexadecimalColor.substring(1), 16)));
+    public static String toSectionHex(String hexadecimalColor) {
+        if (!isHexadecimalSequence(hexadecimalColor, 1, 6)) {
+            return "§r";
         }
-        return 'r';
-    }
-    
-    /**
-     * 1.15 below: Classic color
-     * 1.16 above: Hex color & classic color
-     * @return 
-     */
-    public static boolean isSupportsRGBVersions() {
-        return !Bukkit.getBukkitVersion().startsWith("1.7") && !Bukkit.getBukkitVersion().startsWith("1.8") && !Bukkit.getBukkitVersion().startsWith("1.9") && !Bukkit.getBukkitVersion().startsWith("1.10") &&
-                !Bukkit.getBukkitVersion().startsWith("1.11") && !Bukkit.getBukkitVersion().startsWith("1.12") && !Bukkit.getBukkitVersion().startsWith("1.13") && !Bukkit.getBukkitVersion().startsWith("1.14") && !Bukkit.getBukkitVersion().startsWith("1.15");
+        return toSectionHex(new Color(Integer.parseInt(hexadecimalColor.substring(1), 16)));
     }
     
     /**
@@ -142,7 +122,7 @@ public class ColorUtils
         if (text == null) return null;
         try {
             //Preliminary coloring
-            String content = ChatColor.translateAlternateColorCodes('&', text);
+            String content = translateAlternateColorCodes('&', text);
             
             //Functional coloring (Tag identification)
             for (FunctionalColor function : colors) content = function.coloring(content);
@@ -156,7 +136,7 @@ public class ColorUtils
             //Hexadecimal coloring
             List<String> hexadecimalColors = getHexadecimalColors(content);
             for (String color : hexadecimalColors) {
-                content = content.replace(color, isSupportsRGBVersions() ? ChatColor.of(color).toString() : ChatColor.getByChar(toNearestColor(color)).toString());
+                content = content.replace(color, toSectionHex(color));
             }
             return content;
         } catch (Exception ex) {
@@ -172,7 +152,7 @@ public class ColorUtils
      * @param previousTypeface Previous typeface of text
      * @return 
      */
-    public static String coloring(String text, ChatColor[] colors, String previousTypeface) {
+    public static String coloring(String text, String[] colors, String previousTypeface) {
         if (text == null || text.isEmpty()) return text;
         StringBuilder builder = new StringBuilder();
         String colorName = "";
@@ -262,6 +242,17 @@ public class ColorUtils
         }
         return hexadecimalColors;
     }
+
+    private static String translateAlternateColorCodes(char alternateColorCharacter, String text) {
+        char[] characters = text.toCharArray();
+        for (int i = 0; i < characters.length - 1; i++) {
+            if (characters[i] == alternateColorCharacter && isColorOrTypefaceSymbol(characters[i + 1])) {
+                characters[i] = '§';
+                characters[i + 1] = Character.toLowerCase(characters[i + 1]);
+            }
+        }
+        return new String(characters);
+    }
     
     private static List<String> getColorSymbols(String text) {
         List<String> result = new ArrayList<>();
@@ -320,14 +311,26 @@ public class ColorUtils
     }
     
     private static boolean isColorSymbol(String text, int index) {
-        char c = Character.toLowerCase(text.charAt(index));
+        return isColorSymbol(text.charAt(index));
+    }
+
+    private static boolean isColorSymbol(char character) {
+        char c = Character.toLowerCase(character);
         return ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || c == 'r');
     }
     
     private static boolean isTypefaceSymbol(String text, int index) {
-        char c = Character.toLowerCase(text.charAt(index));
+        return isTypefaceSymbol(text.charAt(index));
+    }
+
+    private static boolean isTypefaceSymbol(char character) {
+        char c = Character.toLowerCase(character);
         return c == 'l' || c == 'o' ||
             c == 'n' || c == 'm' ||
             c == 'k';
+    }
+
+    private static boolean isColorOrTypefaceSymbol(char character) {
+        return isColorSymbol(character) || isTypefaceSymbol(character);
     }
 }

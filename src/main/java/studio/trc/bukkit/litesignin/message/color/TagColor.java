@@ -5,8 +5,6 @@ import java.util.Map;
 
 import lombok.Getter;
 
-import net.md_5.bungee.api.ChatColor;
-
 import studio.trc.bukkit.litesignin.message.tag.TagContentExtractor;
 import studio.trc.bukkit.litesignin.message.tag.TagContentInfo;
 
@@ -28,7 +26,7 @@ public class TagColor
             if (colorAndTypefaceNames.containsKey(color)) { //Example: <color:red>
                 content = tagContent.replace(content, (tagContent.getCloseTag() != null ? "<previousColor>" : "") + colorAndTypefaceNames.get(color) + text + (tagContent.getCloseTag() != null ? "</previousColor>" : ""));
             } else if (color.startsWith("#")) { //Example: <color:#FF0000>
-                content = tagContent.replace(content, (tagContent.getCloseTag() != null ? "<previousColor>" : "") + (ColorUtils.isSupportsRGBVersions() ? ChatColor.of(color).toString() : ChatColor.getByChar(ColorUtils.toNearestColor(color))).toString() + text + (tagContent.getCloseTag() != null ? "</previousColor>" : ""));
+                content = tagContent.replace(content, (tagContent.getCloseTag() != null ? "<previousColor>" : "") + ColorUtils.toSectionHex(color) + text + (tagContent.getCloseTag() != null ? "</previousColor>" : ""));
             }
         }
         // Color name as tag

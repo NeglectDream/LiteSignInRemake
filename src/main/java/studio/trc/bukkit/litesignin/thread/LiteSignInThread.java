@@ -9,12 +9,7 @@ import lombok.Setter;
 
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
-import studio.trc.bukkit.litesignin.database.DatabaseTable;
-import studio.trc.bukkit.litesignin.database.engine.MySQLEngine;
-import studio.trc.bukkit.litesignin.database.util.BackupUtil;
-import studio.trc.bukkit.litesignin.database.util.RollBackUtil;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.util.PluginControl;
 import studio.trc.bukkit.litesignin.util.LiteSignInProperties;
 
 public class LiteSignInThread
@@ -45,7 +40,7 @@ public class LiteSignInThread
         while (running) {
             try {
                 long usedTime = System.currentTimeMillis();
-                if (!tasks.isEmpty() && !BackupUtil.isBackingUp() && !RollBackUtil.isRollingback()) {
+                if (!tasks.isEmpty()) {
                     waitToExecute.addAll(tasks);
                     waitToExecute.stream().filter(task -> {
                         if (task.getTotalExecuteTimes() != -1 && task.getExecuteTimes() >= task.getTotalExecuteTimes()) {
@@ -80,13 +75,7 @@ public class LiteSignInThread
             taskThread.running = false;
         }
         taskThread = new LiteSignInThread("LiteSignIn-TaskThread", ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getDouble("Async-Thread-Settings.Task-Thread-Delay"));
-        
-        if (PluginControl.useMySQLStorage()) {
-            taskThread.tasks.add(new LiteSignInTask(() -> {
-                MySQLEngine.getInstance().executeQuery("SELECT COUNT(*) FROM " + MySQLEngine.getInstance().getTableSyntax(DatabaseTable.PLAYER_DATA));
-            }, -1, ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getLong("MySQL-Storage.Wait-Timeout")));
-        }
-        
+
         LiteSignInProperties.sendOperationMessage("AsyncThreadStarted", MessageUtil.getDefaultPlaceholders());
         taskThread.start();
     }

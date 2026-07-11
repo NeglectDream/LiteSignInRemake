@@ -9,18 +9,14 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 
-import studio.trc.bukkit.litesignin.Main;
 import studio.trc.bukkit.litesignin.api.Storage;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.database.util.BackupUtil;
-import studio.trc.bukkit.litesignin.database.util.RollBackUtil;
 import studio.trc.bukkit.litesignin.message.JSONComponent;
 import studio.trc.bukkit.litesignin.thread.LiteSignInThread;
 import studio.trc.bukkit.litesignin.util.BukkitSchedulerManager;
 import studio.trc.bukkit.litesignin.util.OnlineTimeRecord;
-import studio.trc.bukkit.litesignin.util.Updater;
 import studio.trc.bukkit.litesignin.util.SignInDate;
 import studio.trc.bukkit.litesignin.util.PluginControl;
 import studio.trc.bukkit.litesignin.util.LiteSignInUtils;
@@ -31,9 +27,6 @@ public class Join
 {
     @EventHandler(ignoreCancelled = true)
     public void onJoin(PlayerJoinEvent event) {
-        if (BackupUtil.isBackingUp() || RollBackUtil.isRollingback()) {
-            return;
-        }
         Player player = event.getPlayer();
         OnlineTimeRecord.getJoinTimeRecord().put(player.getUniqueId(), System.currentTimeMillis());
         Runnable task = () -> {
@@ -49,12 +42,12 @@ public class Join
                     if (PluginControl.autoSignIn() && LiteSignInUtils.hasPermission(player, "Join-Auto-SignIn")) {
                         autoSignIn = true;
                     } else if (OnlineTimeRecord.getSignInRequirement(player) == -1) {
-                        LiteSignInThread.runTask(() -> SkullManager.refreshTextureByDefaultMethod(player.getUniqueId(), player.getName()));
+                        LiteSignInThread.runTask(() -> SkullManager.refreshTexture(player.getUniqueId(), player.getName()));
                         SignInDate date = SignInDate.getInstance(new Date());
                         MessageUtil.getMessageList("Join-Event.Messages").stream().forEach(text -> {
                             if (text.toLowerCase().contains("%opengui%")) {
                                 Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
-                                placeholders.put("{date}", date.getName(ConfigurationUtil.getConfig(ConfigurationType.GUI_SETTINGS).getString(MessageUtil.getLanguage() + ".SignIn-GUI-Settings.Date-Format")));
+                                placeholders.put("{date}", date.getName(ConfigurationUtil.getConfig(ConfigurationType.GUI_SETTINGS).getString("SignIn-GUI-Settings.Date-Format")));
                                 JSONComponent jsonComponent = new JSONComponent(
                                     MessageUtil.replacePlaceholders(player, MessageUtil.getMessage("Join-Event.Open-GUI"), placeholders),
                                     MessageUtil.getMessageList("Join-Event.Hover-Text").stream().map(line -> MessageUtil.replacePlaceholders(player, line, placeholders)).collect(Collectors.toList()),
@@ -64,7 +57,7 @@ public class Join
                                 MessageUtil.sendMessageWithJSONComponent(player, text, placeholders, "%openGUI%", jsonComponent);
                             } else {
                                 Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
-                                placeholders.put("{date}", date.getName(ConfigurationUtil.getConfig(ConfigurationType.GUI_SETTINGS).getString(MessageUtil.getLanguage() + ".SignIn-GUI-Settings.Date-Format")));
+                                placeholders.put("{date}", date.getName(ConfigurationUtil.getConfig(ConfigurationType.GUI_SETTINGS).getString("SignIn-GUI-Settings.Date-Format")));
                                 MessageUtil.sendMessage(player, text, placeholders);
                             }
                         });
@@ -76,34 +69,10 @@ public class Join
         if (ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Async-Thread-Settings.Async-Task-Settings.Load-Data")) {
             LiteSignInThread.runTask(task, ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getDouble("Join-Event.Delay"));
         } else {
-            BukkitSchedulerManager.runBukkitTask(task, (long) (ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getDouble("Join-Event.Delay") * 20), player);
-        }
-        if (Updater.isFoundANewVersion() && PluginControl.enableUpdater()) {
-            if (LiteSignInUtils.hasPermission(player, "Updater")) {
-                String nowVersion = Main.getInstance().getDescription().getVersion();
-                MessageUtil.getMessageList("Updater.Checked").stream().forEach(text -> {
-                    if (text.toLowerCase().contains("%link%")) {
-                        JSONComponent jsonComponent = new JSONComponent(MessageUtil.getMessage("Updater.Link.Message"), MessageUtil.getMessageList("Updater.Link.Hover-Text"), "OPEN_URL", Updater.getLink());
-                        Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
-                        MessageUtil.sendMessageWithJSONComponent(player, text, placeholders, "%link%", jsonComponent);
-                    } else {
-                        Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
-                        placeholders.put("{nowVersion}", nowVersion);
-                        placeholders.put("{version}", Updater.getNewVersion());
-                        placeholders.put("{link}", Updater.getLink());
-                        placeholders.put("{description}", Updater.getDescription());
-                        MessageUtil.sendMessage(player, text, placeholders);
-                    }
-                });
-                if (!Updater.getExtraMessages().isEmpty()) {
-                    Updater.getExtraMessages().forEach(message -> {
-                        MessageUtil.sendMessage(player, message);
-                    });
-                }
-            }
+            BukkitSchedulerManager.runBukkitTask(task, (long) (ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getDouble("Join-Event.Delay") * 20));
         }
     }
-    
+
     public void schedule(Storage data, Player player, boolean unableToHoldCards, boolean autoSignIn) {
         BukkitSchedulerManager.runBukkitTask(() -> {
             if (unableToHoldCards) {
@@ -117,6 +86,6 @@ public class Join
                     data.signIn();
                 }
             }
-        }, 0, player);
+        }, 0);
     }
 }

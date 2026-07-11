@@ -8,7 +8,6 @@ import java.util.Map;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import studio.trc.bukkit.litesignin.Main;
-import studio.trc.bukkit.litesignin.message.MessageUtil;
 import studio.trc.bukkit.litesignin.util.LiteSignInProperties;
 
 public class DefaultConfigurationFile
@@ -36,6 +35,6 @@ public class DefaultConfigurationFile
     }
     
     public static String getDefaultConfigurationFilePath(ConfigurationType fileType) {
-        return "/Languages/" + (fileType.isUniversal() ? "Universal" : MessageUtil.Language.getLocaleLanguage().getFolderName()) + "/" + fileType.getLocalFilePath();
+        return "/" + fileType.getLocalFilePath();
     }
 }

@@ -1,8 +1,6 @@
 package studio.trc.bukkit.litesignin.command;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,14 +12,8 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 
-import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
-import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.database.util.BackupUtil;
-import studio.trc.bukkit.litesignin.database.util.RollBackUtil;
-import studio.trc.bukkit.litesignin.util.PluginControl;
 import studio.trc.bukkit.litesignin.util.LiteSignInUtils;
-import studio.trc.bukkit.litesignin.util.Updater;
 
 public class SignInCommand
     implements CommandExecutor, TabCompleter
@@ -31,15 +23,6 @@ public class SignInCommand
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        checkUpdate();
-        if (BackupUtil.isBackingUp()) {
-            MessageUtil.sendMessage(sender, ConfigurationUtil.getConfig(ConfigurationType.MESSAGES), "Database-Management.Backup.BackingUp");
-            return true;
-        }
-        if (RollBackUtil.isRollingback()) {
-            MessageUtil.sendMessage(sender, ConfigurationUtil.getConfig(ConfigurationType.MESSAGES), "Database-Management.RollBack.RollingBack");
-            return true;
-        }
         if (args.length == 0) {
             MessageUtil.sendCommandMessage(sender, "Unknown-Command");
         } else if (args.length >= 1) {
@@ -67,16 +50,6 @@ public class SignInCommand
         }
         SignInSubCommand command = subCommands.get(subCommand);
         if (LiteSignInUtils.hasCommandPermission(sender, command.getCommandType().getCommandPermissionPath(), true)) command.execute(sender, subCommand, args);
-    }
-    
-    private void checkUpdate() {
-        if (PluginControl.enableUpdater()) {
-            String now = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
-            String checkUpdateTime = new SimpleDateFormat("yyyy-MM-dd").format(Updater.getTimeOfLastCheckUpdate());
-            if (!now.equals(checkUpdateTime)) {
-                Updater.checkUpdate();
-            }
-        }
     }
     
     private List<String> getCommands(CommandSender sender) {
