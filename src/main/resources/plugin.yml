@@ -1,7 +1,7 @@
 name: LiteSignIn
 version: 1.8.10.2
 main: studio.trc.bukkit.litesignin.Main
-author: TRCStudioDean
+author: TRCStudioDean wangmeng123
 api-version: 1.21
 softdepend: [PlaceholderAPI]
 depend: [packetevents]
