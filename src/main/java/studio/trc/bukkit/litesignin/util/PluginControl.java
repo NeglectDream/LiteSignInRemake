@@ -25,7 +25,7 @@ import studio.trc.bukkit.litesignin.database.engine.SQLiteEngine;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
 import studio.trc.bukkit.litesignin.message.color.ColorUtils;
 import studio.trc.bukkit.litesignin.event.Menu;
-import studio.trc.bukkit.litesignin.packet.PacketSignInMenuService;
+import studio.trc.bukkit.litesignin.gui.SignInMenuService;
 import studio.trc.bukkit.litesignin.thread.LiteSignInThread;
 import studio.trc.bukkit.litesignin.queue.SignInQueue;
 
@@ -49,7 +49,7 @@ public class PluginControl
             MessageUtil.setEnabledPAPI(false);
             MessageUtil.sendConsoleMessage("Console-Messages.PlaceholderAPI-Not-Found", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
         }
-        Bukkit.getOnlinePlayers().stream().filter(ps -> PacketSignInMenuService.isOpening(ps.getUniqueId())).forEachOrdered(Menu::closeGUI);
+        Bukkit.getOnlinePlayers().stream().filter(ps -> SignInMenuService.isOpening(ps.getUniqueId())).forEachOrdered(Menu::closeGUI);
         LiteSignInThread.initialize();
     }
 

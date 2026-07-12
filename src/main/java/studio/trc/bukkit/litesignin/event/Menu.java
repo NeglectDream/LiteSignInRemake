@@ -6,8 +6,7 @@ import java.util.Map;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-
-import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientClickWindow.WindowClickType;
+import org.bukkit.event.inventory.ClickType;
 
 import studio.trc.bukkit.litesignin.Main;
 import studio.trc.bukkit.litesignin.api.Storage;
@@ -17,8 +16,8 @@ import studio.trc.bukkit.litesignin.event.custom.SignInGUIOpenEvent;
 import studio.trc.bukkit.litesignin.gui.SignInGUI;
 import studio.trc.bukkit.litesignin.gui.SignInGUIColumn;
 import studio.trc.bukkit.litesignin.gui.SignInInventory;
+import studio.trc.bukkit.litesignin.gui.SignInMenuService;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.packet.PacketSignInMenuService;
 import studio.trc.bukkit.litesignin.queue.SignInQueue;
 import studio.trc.bukkit.litesignin.util.BukkitSchedulerManager;
 import studio.trc.bukkit.litesignin.util.LiteSignInUtils;
@@ -79,7 +78,7 @@ public class Menu
     private static void fireOpenEvent(SignInGUIOpenEvent event, Player player, SignInInventory inventory) {
         Bukkit.getPluginManager().callEvent(event);
         if (!event.isCancelled()) {
-            PacketSignInMenuService.open(player, inventory);
+            SignInMenuService.open(player, inventory);
         }
     }
 
@@ -87,14 +86,24 @@ public class Menu
         if (player == null) {
             return;
         }
-        BukkitSchedulerManager.runBukkitTask(() -> PacketSignInMenuService.close(player), 0);
+        BukkitSchedulerManager.runBukkitTask(() -> SignInMenuService.close(player), 0);
     }
 
-    public static boolean handleWindowClick(Player player, int slot, int button, WindowClickType clickType) {
-        if (player == null || slot < 0 || slot >= SIGN_IN_MENU_SIZE || !isAllowedClick(clickType, button)) {
+    /**
+     * Handles a click inside the sign-in menu.
+     *
+     * @param player the clicking player
+     * @param slot the top-container slot that was clicked
+     * @param clickType the Bukkit click type; only plain and shift-modified
+     *                  left/right clicks are accepted (see {@link #isAllowedClick})
+     * @return {@code true} if the click triggered a page switch or close, so
+     *         the caller skips resync
+     */
+    public static boolean handleWindowClick(Player player, int slot, ClickType clickType) {
+        if (player == null || slot < 0 || slot >= SIGN_IN_MENU_SIZE || !isAllowedClick(clickType)) {
             return false;
         }
-        SignInInventory inv = PacketSignInMenuService.getOpeningInventory(player.getUniqueId());
+        SignInInventory inv = SignInMenuService.getOpeningInventory(player.getUniqueId());
         if (inv == null) {
             return false;
         }
@@ -116,19 +125,34 @@ public class Menu
         return false;
     }
 
-    private static boolean isAllowedClick(WindowClickType clickType, int button) {
-        return clickType == WindowClickType.PICKUP && (button == 0 || button == 1);
+    /**
+     * Accepts plain and shift-modified left/right clicks. The sign-in menu is
+     * a read-only button panel, so number-key swaps, double-click collection,
+     * drop and {@code MIDDLE} (creative clone) are rejected outright — they
+     * have no meaningful sign-in semantics and would only serve to bypass a
+     * cancelled click in obscure client-mod scenarios.
+     */
+    private static boolean isAllowedClick(ClickType clickType) {
+        return clickType == ClickType.LEFT
+                || clickType == ClickType.RIGHT
+                || clickType == ClickType.SHIFT_LEFT
+                || clickType == ClickType.SHIFT_RIGHT;
     }
 
     private static boolean handleKeyButton(Player player, Storage data, SignInGUIColumn columns, YamlConfiguration guiConfig,
                                            int nextPageMonth, int nextPageYear, int previousPageMonth, int previousPageYear) {
         boolean sessionChanged = false;
-        boolean closeAfterClick = guiConfig.getBoolean("SignIn-GUI-Settings.Key." + columns.getKeyType().getSectionName() + ".Close-GUI");
+        // 只有签到/补签真正成功时才执行按钮配置的 Commands/Messages，
+        // 防止重复点击或签到失败时刷取奖励命令（P2 根因修复）。
+        boolean signedIn = false;
+        String keyTypePath = "SignIn-GUI-Settings.Key." + columns.getKeyType().getSectionName();
+        boolean closeAfterClick = guiConfig.getBoolean(keyTypePath + ".Close-GUI");
         SignInDate today = SignInDate.getInstance(new Date());
         if (columns.getDate().equals(today) && !data.alreadySignIn()) {
             long requirement = OnlineTimeRecord.getSignInRequirement(player);
             if (requirement == -1) {
                 data.signIn();
+                signedIn = true;
                 Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
                 placeholders.put("{nextPageMonth}", String.valueOf(nextPageMonth));
                 placeholders.put("{nextPageYear}", String.valueOf(nextPageYear));
@@ -164,6 +188,7 @@ public class Menu
                 } else if (data.getRetroactiveCard() >= PluginControl.getRetroactiveCardQuantityRequired()) {
                     data.takeRetroactiveCard(PluginControl.getRetroactiveCardQuantityRequired());
                     data.signIn(columns.getDate());
+                    signedIn = true;
                     Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
                     placeholders.put("{date}", columns.getDate().getName(guiConfig.getString("SignIn-GUI-Settings.Date-Format")));
                     placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
@@ -186,12 +211,14 @@ public class Menu
             closeTrackedGUI(player);
             sessionChanged = true;
         }
-        Map<String, String> placeholders = getClickPlaceholders(player, columns.getDate().getDataText(false), nextPageMonth, nextPageYear, previousPageMonth, previousPageYear);
-        if (guiConfig.contains("SignIn-GUI-Settings.Key." + columns.getKeyType().getSectionName() + ".Commands")) {
-            guiConfig.getStringList("SignIn-GUI-Settings.Key." + columns.getKeyType().getSectionName() + ".Commands").forEach(commands -> runCommand(player, commands, placeholders));
-        }
-        if (guiConfig.contains("SignIn-GUI-Settings.Key." + columns.getKeyType().getSectionName() + ".Messages")) {
-            guiConfig.getStringList("SignIn-GUI-Settings.Key." + columns.getKeyType().getSectionName() + ".Messages").forEach(message -> MessageUtil.sendMessage(player, message, placeholders));
+        if (signedIn) {
+            Map<String, String> placeholders = getClickPlaceholders(player, columns.getDate().getDataText(false), nextPageMonth, nextPageYear, previousPageMonth, previousPageYear);
+            if (guiConfig.contains(keyTypePath + ".Commands")) {
+                guiConfig.getStringList(keyTypePath + ".Commands").forEach(commands -> runCommand(player, commands, placeholders));
+            }
+            if (guiConfig.contains(keyTypePath + ".Messages")) {
+                guiConfig.getStringList(keyTypePath + ".Messages").forEach(message -> MessageUtil.sendMessage(player, message, placeholders));
+            }
         }
         return sessionChanged;
     }
@@ -231,7 +258,7 @@ public class Menu
     }
 
     private static void closeTrackedGUI(Player player) {
-        PacketSignInMenuService.close(player);
+        SignInMenuService.close(player);
     }
     
     public static void runCommand(Player player, String commands, Map<String, String> placeholders) {

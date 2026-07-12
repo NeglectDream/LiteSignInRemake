@@ -2,6 +2,7 @@ package studio.trc.bukkit.litesignin.gui;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -95,8 +96,15 @@ public class SignInInventory
         return cloneContents(contents);
     }
 
+    /**
+     * Returns an unmodifiable view of the button metadata.
+     *
+     * <p>The snapshot is immutable: callers (e.g. {@code SignInGUIOpenEvent}
+     * listeners) cannot mutate the internal list, matching the class contract
+     * documented above.
+     */
     public List<SignInGUIColumn> getButtons() {
-        return buttons;
+        return Collections.unmodifiableList(buttons);
     }
 
     private static List<SignInGUIColumn> cloneButtons(List<SignInGUIColumn> buttons) {

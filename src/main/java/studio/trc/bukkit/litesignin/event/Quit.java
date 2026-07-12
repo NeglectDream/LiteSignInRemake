@@ -10,7 +10,7 @@ import studio.trc.bukkit.litesignin.api.Storage;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.database.storage.SQLiteStorage;
-import studio.trc.bukkit.litesignin.packet.PacketSignInMenuService;
+import studio.trc.bukkit.litesignin.gui.SignInMenuService;
 import studio.trc.bukkit.litesignin.thread.LiteSignInThread;
 import studio.trc.bukkit.litesignin.util.OnlineTimeRecord;
 
@@ -23,7 +23,7 @@ public class Quit
         if (ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Online-Duration-Condition.Enabled")) {
             OnlineTimeRecord.savePlayerOnlineTime(player);
         }
-        PacketSignInMenuService.close(player);
+        SignInMenuService.close(player);
         LiteSignInThread.runTask(() -> {
             Storage.getPlayer(player).saveData();
             SQLiteStorage.cache.remove(player.getUniqueId());
