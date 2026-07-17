@@ -35,8 +35,11 @@ public class SkullManager
         StringBuilder source = new StringBuilder();
         try {
             URL url = new URL("https://sessionserver.mojang.com/session/minecraft/profile/" + uuid.toString());
+            java.net.URLConnection connection = url.openConnection();
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
             String line;
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
                 while ((line = reader.readLine()) != null) {
                     source.append(line);
                     source.append('\n');

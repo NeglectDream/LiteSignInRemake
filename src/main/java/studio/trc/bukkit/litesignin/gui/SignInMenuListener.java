@@ -7,111 +7,108 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.inventory.Inventory;
 
 import studio.trc.bukkit.litesignin.event.Menu;
-import studio.trc.bukkit.litesignin.event.custom.SignInGUICloseEvent;
-import studio.trc.bukkit.litesignin.packet.SignInMenuOverlay;
 
 /**
- * Bukkit listener backing the sign-in menu.
- * <p>
- * Replaces the former {@code PacketSignInPacketListener}. Click and drag
- * permission plus the close lifecycle run through the standard Bukkit event
- * pipeline on the main thread — this serialises interaction (no main-thread
- * packet amplification) and uses the holder reference itself as the session
- * token (no window-id ABA), while other plugins can still hook these events.
+ * Bukkit authority for sign-in inventory opening, clicks, drags and closing.
+ * PacketEvents is visual only; all player interaction is denied or routed here
+ * on the main thread after current session identity has been verified.
  */
 public final class SignInMenuListener
     implements Listener
 {
-    private static final int TOP_SLOTS = 54;
-
-    /**
-     * Cancels every click inside a sign-in menu and routes top-container
-     * clicks to {@link Menu#handleWindowClick}.
-     *
-     * <p>Player-inventory area clicks (raw slot {@code >= 54}) are cancelled
-     * to prevent item relocation but are not forwarded: the sign-in menu only
-     * exposes buttons in the top 54 slots.
-     */
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onInventoryClick(InventoryClickEvent event) {
-        Inventory inv = event.getInventory();
-        if (!(inv.getHolder() instanceof SignInMenuHolder)) {
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    public void onInventoryOpen(InventoryOpenEvent event) {
+        if (!(event.getPlayer() instanceof Player)) {
             return;
         }
-        // The sign-in menu never accepts item manipulation.
+        Player player = (Player) event.getPlayer();
+        SignInMenuSession session = SignInMenuService.getSession(player.getUniqueId());
+        if (session == null) {
+            return;
+        }
+        Inventory inventory = event.getInventory();
+        if (!event.isCancelled()
+                && session.getState() == SignInMenuSession.State.OPENING
+                && SignInMenuService.isCurrent(player, session, inventory)) {
+            session.armOpenExpectation();
+        } else {
+            session.invalidateOpenExpectation();
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onInventoryClick(InventoryClickEvent event) {
+        Inventory inventory = event.getInventory();
+        if (!(inventory.getHolder() instanceof SignInMenuHolder)) {
+            return;
+        }
+        boolean previouslyCancelled = event.isCancelled();
         event.setCancelled(true);
 
         if (!(event.getWhoClicked() instanceof Player)) {
             return;
         }
         Player player = (Player) event.getWhoClicked();
-
-        // Only top-container clicks map to buttons; the player's own inventory
-        // area is just shielded from interaction.
-        if (event.getRawSlot() >= TOP_SLOTS || event.getRawSlot() < 0) {
+        SignInMenuHolder holder = (SignInMenuHolder) inventory.getHolder();
+        SignInMenuSession session = holder.getSession();
+        if (!SignInMenuService.isCurrent(player, session, inventory)) {
             return;
         }
 
-        boolean sessionChanged = Menu.handleWindowClick(
-                player, event.getSlot(), event.getClick());
-        if (!sessionChanged) {
-            SignInMenuService.resync(player);
-        }
-    }
-
-    /**
-     * Cancels any drag touching the sign-in top container.
-     *
-     * <p>Drags into the top 54 slots would otherwise move real items into the
-     * (server-side empty) menu inventory; since the overlay rewrites outbound
-     * packets, such items would be invisible to the client yet present on the
-     * server — an item-loss vector. Cancelling everything is the safe default
-     * and matches the {@code onInventoryClick} "no manipulation" contract.
-     */
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onInventoryDrag(InventoryDragEvent event) {
-        Inventory inv = event.getInventory();
-        if (!(inv.getHolder() instanceof SignInMenuHolder)) {
+        int rawSlot = event.getRawSlot();
+        if (rawSlot < 0 || rawSlot >= SignInMenuSession.MENU_SIZE) {
             return;
         }
-        // Any drag slot inside the top container (raw slot < 54) is forbidden.
-        for (int slot : event.getRawSlots()) {
-            if (slot >= 0 && slot < TOP_SLOTS) {
-                event.setCancelled(true);
-                return;
+        if (previouslyCancelled) {
+            if (session.hasOverlayItem(rawSlot)) {
+                SignInMenuService.requestResync(player, session);
             }
+            return;
+        }
+
+        boolean sessionChanged = Menu.handleWindowClick(player, rawSlot, event.getClick());
+        if (!sessionChanged && session.hasOverlayItem(rawSlot)) {
+            SignInMenuService.requestResync(player, session);
         }
     }
 
-    /**
-     * Clears the session when the player closes the sign-in menu, unless the
-     * holder is flagged {@code replacing} (internal page switch).
-     *
-     * <p>{@link SignInMenuService#removeIfCurrent} guards against a stale close
-     * event from a superseded holder tearing down a freshly opened session.
-     */
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onInventoryDrag(InventoryDragEvent event) {
+        Inventory inventory = event.getInventory();
+        if (!(inventory.getHolder() instanceof SignInMenuHolder)) {
+            return;
+        }
+        for (int slot : event.getRawSlots()) {
+            if (slot < 0 || slot >= SignInMenuSession.MENU_SIZE) {
+                continue;
+            }
+            event.setCancelled(true);
+            if (event.getWhoClicked() instanceof Player) {
+                Player player = (Player) event.getWhoClicked();
+                SignInMenuSession session = ((SignInMenuHolder) inventory.getHolder()).getSession();
+                if (SignInMenuService.isCurrent(player, session, inventory)) {
+                    SignInMenuService.requestResync(player, session);
+                }
+            }
+            return;
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onInventoryClose(InventoryCloseEvent event) {
-        Inventory inv = event.getInventory();
-        if (!(inv.getHolder() instanceof SignInMenuHolder)) {
+        Inventory inventory = event.getInventory();
+        if (!(inventory.getHolder() instanceof SignInMenuHolder)
+                || !(event.getPlayer() instanceof Player)) {
             return;
         }
-        SignInMenuHolder holder = (SignInMenuHolder) inv.getHolder();
-        if (holder.isReplacing()) {
+        SignInMenuSession session = ((SignInMenuHolder) inventory.getHolder()).getSession();
+        if (session.getState() == SignInMenuSession.State.REPLACING) {
             return;
         }
-        if (!(event.getPlayer() instanceof Player)) {
-            return;
-        }
-        Player player = (Player) event.getPlayer();
-        if (SignInMenuService.removeIfCurrent(player, holder)) {
-            // Drop the packet overlay last so a late outbound packet for the
-            // closing window is not left rewriting a fresh session.
-            SignInMenuOverlay.clear(player, inv);
-            org.bukkit.Bukkit.getPluginManager().callEvent(new SignInGUICloseEvent(player));
-        }
+        SignInMenuService.handleInventoryClose((Player) event.getPlayer(), session);
     }
 }

@@ -1,14 +1,9 @@
 package studio.trc.bukkit.litesignin.util;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import studio.trc.bukkit.litesignin.message.ItemHoverComponentFactory;
 
 /**
  * Adventure component helpers for the Minecraft 1.21.x runtime.
@@ -54,18 +49,5 @@ public class AdventureUtils
             }
         }
         return null;
-    }
-
-    public static Map<String, Component> getItemDisplay(List<CustomItem> itemList) {
-        Map<String, Component> json = new HashMap<>();
-        Component component = Component.text("");
-        for (int i = 0;i < itemList.size();i++) {
-            component = component.append(ItemHoverComponentFactory.getAdventureJSONItemStack(itemList.get(i).getItemStack()));
-            if (i != itemList.size() - 1) {
-                component = component.append(Component.text(", "));
-            }
-        }
-        json.put("%list%", component);
-        return json;
     }
 }

@@ -6,9 +6,15 @@ import java.sql.SQLException;
 
 import lombok.Getter;
 
-public class SQLQuery
-    implements AutoCloseable
-{
+import studio.trc.bukkit.litesignin.database.DatabaseException;
+
+/**
+ * Compatibility wrapper for a disconnected query result.
+ *
+ * <p>Project-owned database code should prefer {@link SQLiteEngine#query}; this
+ * wrapper remains for public API compatibility.</p>
+ */
+public class SQLQuery implements AutoCloseable {
     @Getter
     private final ResultSet result;
     @Getter
@@ -21,11 +27,27 @@ public class SQLQuery
 
     @Override
     public void close() {
-        try {
-            result.close();
-            statement.close();
-        } catch (SQLException ex) {
-            ex.printStackTrace();
+        SQLException failure = null;
+        if (result != null) {
+            try {
+                result.close();
+            } catch (SQLException ex) {
+                failure = ex;
+            }
+        }
+        if (statement != null) {
+            try {
+                statement.close();
+            } catch (SQLException ex) {
+                if (failure == null) {
+                    failure = ex;
+                } else {
+                    failure.addSuppressed(ex);
+                }
+            }
+        }
+        if (failure != null) {
+            throw new DatabaseException("Unable to close SQL query resources", failure);
         }
     }
 }

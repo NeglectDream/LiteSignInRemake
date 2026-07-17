@@ -1,8 +1,8 @@
 package studio.trc.bukkit.litesignin;
 
+import studio.trc.bukkit.litesignin.api.Statistics;
 import studio.trc.bukkit.litesignin.command.SignInCommand;
 import studio.trc.bukkit.litesignin.command.SignInSubCommandType;
-import studio.trc.bukkit.litesignin.thread.LiteSignInThread;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
 import studio.trc.bukkit.litesignin.database.storage.SQLiteStorage;
 import studio.trc.bukkit.litesignin.database.engine.SQLiteEngine;
@@ -10,6 +10,8 @@ import studio.trc.bukkit.litesignin.event.Quit;
 import studio.trc.bukkit.litesignin.event.Join;
 import studio.trc.bukkit.litesignin.gui.SignInMenuListener;
 import studio.trc.bukkit.litesignin.gui.SignInMenuService;
+import studio.trc.bukkit.litesignin.packet.SignInMenuOverlay;
+import studio.trc.bukkit.litesignin.service.PhysicalCardRecoveryService;
 import studio.trc.bukkit.litesignin.util.PluginControl;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 
@@ -33,23 +35,52 @@ public class Main
     @Override
     public void onEnable() {
         main = this;
+        if (!PluginControl.initialize()) {
+            getLogger().severe("LiteSignIn could not initialize its database and will be disabled.");
+            Bukkit.getPluginManager().disablePlugin(this);
+            return;
+        }
 
-        // 配置优先加载：确保后续控制台消息能从 Messages.yml 正确读取
-        PluginControl.reload();
-
-        registerCommandExecutor();
-        registerEvent();
-        MessageUtil.sendConsoleMessage("Console-Messages.Plugin-Enabled-Successfully", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
+        try {
+            PhysicalCardRecoveryService.recoverOnlinePlayers();
+            SignInMenuOverlay.initialize();
+            registerCommandExecutor();
+            registerEvent();
+            MessageUtil.sendConsoleMessage("Console-Messages.Plugin-Enabled-Successfully",
+                    ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
+        } catch (RuntimeException error) {
+            getLogger().log(java.util.logging.Level.SEVERE, "LiteSignIn startup failed", error);
+            Bukkit.getPluginManager().disablePlugin(this);
+        }
     }
 
     @Override
     public void onDisable() {
-        SignInMenuService.shutdown();
-        LiteSignInThread.getTaskThread().setRunning(false);
-        MessageUtil.sendConsoleMessage("Console-Messages.Async-Thread-Stopped", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
-        SQLiteStorage.cache.values().stream().forEach(SQLiteStorage::saveData);
-        if (SQLiteEngine.getInstance() != null) {
-            SQLiteEngine.getInstance().disconnect();
+        runShutdownStep("close sign-in menus", SignInMenuService::shutdown);
+        runShutdownStep("unregister PacketEvents overlay", SignInMenuOverlay::shutdown);
+        runShutdownStep("stop asynchronous tasks", () -> {
+            PluginControl.shutdownAsyncTasks();
+            MessageUtil.sendConsoleMessage("Console-Messages.Async-Thread-Stopped",
+                    ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
+        });
+        runShutdownStep("save cached player data", SQLiteStorage::flushAll);
+        SQLiteStorage.clearCache();
+        Statistics.clearRetroactiveCooldowns();
+        runShutdownStep("disconnect SQLite", () -> {
+            SQLiteEngine engine = SQLiteEngine.getInstance();
+            if (engine != null) {
+                engine.disconnect();
+                SQLiteEngine.setInstance(null);
+            }
+        });
+    }
+
+    private void runShutdownStep(String description, Runnable step) {
+        try {
+            step.run();
+        } catch (Throwable error) {
+            getLogger().log(java.util.logging.Level.SEVERE,
+                    "Failed to " + description + " during LiteSignIn shutdown", error);
         }
     }
 
@@ -67,6 +98,9 @@ public class Main
 
     private void registerCommandExecutor() {
         PluginCommand command = getCommand("signin");
+        if (command == null) {
+            throw new IllegalStateException("Command 'signin' is not declared in plugin.yml");
+        }
         SignInCommand commandExecutor = new SignInCommand();
         command.setExecutor(commandExecutor);
         command.setTabCompleter(commandExecutor);

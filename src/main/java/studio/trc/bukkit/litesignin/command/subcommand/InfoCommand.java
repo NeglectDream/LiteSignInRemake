@@ -12,7 +12,6 @@ import studio.trc.bukkit.litesignin.api.Storage;
 import studio.trc.bukkit.litesignin.command.SignInSubCommand;
 import studio.trc.bukkit.litesignin.command.SignInSubCommandType;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.queue.SignInQueue;
 
 public class InfoCommand
     implements SignInSubCommand
@@ -30,7 +29,6 @@ public class InfoCommand
                 placeholders.put("{group}", data.getGroup() != null ? data.getGroup().getGroupName() : MessageUtil.getMessage("Command-Messages.Info.Unknown-Group"));
                 placeholders.put("{signin}", String.valueOf(data.alreadySignIn()).replace("true", MessageUtil.getMessage("Command-Messages.Info.true")).replace("false", MessageUtil.getMessage("Command-Messages.Info.false")));
                 placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
-                placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
                 placeholders.put("{total}", String.valueOf(data.getCumulativeNumber()));
                 placeholders.put("{retroactivecard}", String.valueOf(data.getRetroactiveCard()));
                 MessageUtil.sendCommandMessage(sender, "Info.Info", placeholders);
@@ -46,7 +44,6 @@ public class InfoCommand
                     placeholders.put("{group}", data.getGroup() != null ? data.getGroup().getGroupName() : MessageUtil.getMessage("Command-Messages.Info.Unknown-Group"));
                     placeholders.put("{signin}", String.valueOf(data.alreadySignIn()).replace("true", MessageUtil.getMessage("Command-Messages.Info.true")).replace("false", MessageUtil.getMessage("Command-Messages.Info.false")));
                     placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
-                    placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
                     placeholders.put("{total}", String.valueOf(data.getCumulativeNumber()));
                     placeholders.put("{retroactivecard}", String.valueOf(data.getRetroactiveCard()));
                     MessageUtil.sendCommandMessage(sender, "Info.Info", placeholders);

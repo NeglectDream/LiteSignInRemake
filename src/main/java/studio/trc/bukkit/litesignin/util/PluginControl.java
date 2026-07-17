@@ -5,12 +5,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.enchantments.Enchantment;
-import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -20,6 +19,7 @@ import studio.trc.bukkit.litesignin.Main;
 import studio.trc.bukkit.litesignin.configuration.RobustConfiguration;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
+import studio.trc.bukkit.litesignin.database.DatabaseException;
 import studio.trc.bukkit.litesignin.database.storage.SQLiteStorage;
 import studio.trc.bukkit.litesignin.database.engine.SQLiteEngine;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
@@ -27,43 +27,139 @@ import studio.trc.bukkit.litesignin.message.color.ColorUtils;
 import studio.trc.bukkit.litesignin.event.Menu;
 import studio.trc.bukkit.litesignin.gui.SignInMenuService;
 import studio.trc.bukkit.litesignin.thread.LiteSignInThread;
-import studio.trc.bukkit.litesignin.queue.SignInQueue;
 
-public class PluginControl
-{
-    public static void reload() {
-        ConfigurationUtil.reloadConfig();
-        MessageUtil.loadPlaceholders();
-        SQLiteStorage.cache.clear();
-        reloadSQLite();
-        SignInQueue.getInstance().loadQueue();
+public class PluginControl {
+    private static final long EXECUTOR_SHUTDOWN_SECONDS = 10L;
+
+    private PluginControl() {}
+
+    /** Initializes configuration, database, PAPI and the asynchronous executor. */
+    public static boolean initialize() {
         try {
-            if (ConfigurationType.CONFIG.getRobustConfig().getBoolean("PlaceholderAPI.Enabled")) {
-                if (!PlaceholderAPIImpl.getInstance().isRegistered()) {
-                    PlaceholderAPIImpl.getInstance().register();
-                }
-                MessageUtil.setEnabledPAPI(true);
-                MessageUtil.sendConsoleMessage("Console-Messages.Find-The-PlaceholderAPI", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
+            ConfigurationUtil.reloadConfig();
+            MessageUtil.loadPlaceholders();
+            SQLiteEngine candidate = createConnectedEngine();
+            SQLiteEngine.setInstance(candidate);
+            configurePlaceholderAPI();
+            LiteSignInThread.initialize();
+            return true;
+        } catch (RuntimeException error) {
+            logLifecycleFailure("LiteSignIn initialization failed", error);
+            SQLiteEngine failed = SQLiteEngine.getInstance();
+            if (failed != null) {
+                failed.disconnect();
+                SQLiteEngine.setInstance(null);
             }
-        } catch (Error ex) {
-            MessageUtil.setEnabledPAPI(false);
-            MessageUtil.sendConsoleMessage("Console-Messages.PlaceholderAPI-Not-Found", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
+            return false;
         }
-        Bukkit.getOnlinePlayers().stream().filter(ps -> SignInMenuService.isOpening(ps.getUniqueId())).forEachOrdered(Menu::closeGUI);
-        LiteSignInThread.initialize();
+    }
+
+    /**
+     * Reloads runtime resources without closing the active database until the
+     * replacement connection has been validated.
+     */
+    public static boolean reload() {
+        SQLiteEngine oldEngine = SQLiteEngine.getInstance();
+        RobustConfiguration oldConfig = ConfigurationUtil.getConfig(ConfigurationType.CONFIG);
+        String oldPath = oldConfig.getString("SQLite-Storage.Database-Path");
+        String oldFile = oldConfig.getString("SQLite-Storage.Database-File");
+        String oldTable = oldConfig.getString("SQLite-Storage.Table-Name");
+
+        closeOpenMenus();
+        LiteSignInThread.shutdownAndAwait(EXECUTOR_SHUTDOWN_SECONDS, TimeUnit.SECONDS);
+        try {
+            SQLiteStorage.flushAll();
+            ConfigurationUtil.reloadConfig();
+            MessageUtil.loadPlaceholders();
+
+            SQLiteEngine candidate = createConnectedEngine();
+            SQLiteEngine.setInstance(candidate);
+            if (oldEngine != null) {
+                oldEngine.disconnect();
+            }
+            SQLiteStorage.clearCache();
+            configurePlaceholderAPI();
+            LiteSignInThread.initialize();
+            return true;
+        } catch (RuntimeException error) {
+            // Restore the old database settings in memory so the still-open
+            // engine keeps using its original table and file contract.
+            RobustConfiguration current = ConfigurationUtil.getConfig(ConfigurationType.CONFIG);
+            current.set("SQLite-Storage.Database-Path", oldPath);
+            current.set("SQLite-Storage.Database-File", oldFile);
+            current.set("SQLite-Storage.Table-Name", oldTable);
+            SQLiteEngine candidate = SQLiteEngine.getInstance();
+            if (candidate != null && candidate != oldEngine) {
+                candidate.disconnect();
+            }
+            SQLiteEngine.setInstance(oldEngine);
+            configurePlaceholderAPI();
+            LiteSignInThread.initialize();
+            logLifecycleFailure("LiteSignIn reload failed; the previous database remains active", error);
+            return false;
+        }
+    }
+
+    public static boolean shutdownAsyncTasks() {
+        return LiteSignInThread.shutdownAndAwait(EXECUTOR_SHUTDOWN_SECONDS, TimeUnit.SECONDS);
     }
 
     public static void reloadSQLite() {
-        RobustConfiguration config = ConfigurationUtil.getConfig(ConfigurationType.CONFIG);
-        if (SQLiteEngine.getInstance() != null) {
-            SQLiteEngine.getInstance().disconnect();
+        SQLiteEngine replacement = createConnectedEngine();
+        SQLiteEngine previous = SQLiteEngine.getInstance();
+        SQLiteEngine.setInstance(replacement);
+        if (previous != null) {
+            previous.disconnect();
         }
-        SQLiteEngine.setInstance(new SQLiteEngine(config.getString("SQLite-Storage.Database-Path"), config.getString("SQLite-Storage.Database-File")));
-        SQLiteEngine.getInstance().connect();
     }
 
     public static void savePlayersData() {
-        SQLiteStorage.cache.values().stream().forEach(SQLiteStorage::saveData);
+        SQLiteStorage.flushAll();
+    }
+
+    private static SQLiteEngine createConnectedEngine() {
+        RobustConfiguration config = ConfigurationUtil.getConfig(ConfigurationType.CONFIG);
+        SQLiteEngine candidate = new SQLiteEngine(config.getString("SQLite-Storage.Database-Path"),
+                config.getString("SQLite-Storage.Database-File"));
+        candidate.connect();
+        return candidate;
+    }
+
+    private static void closeOpenMenus() {
+        Bukkit.getOnlinePlayers().stream()
+                .filter(player -> SignInMenuService.isOpening(player.getUniqueId()))
+                .forEach(player -> SignInMenuService.close(player));
+    }
+
+    private static void configurePlaceholderAPI() {
+        try {
+            boolean enabled = ConfigurationType.CONFIG.getRobustConfig().getBoolean("PlaceholderAPI.Enabled");
+            PlaceholderAPIImpl expansion = PlaceholderAPIImpl.getInstance();
+            if (enabled) {
+                if (!expansion.isRegistered()) {
+                    expansion.register();
+                }
+                MessageUtil.setEnabledPAPI(true);
+                MessageUtil.sendConsoleMessage("Console-Messages.Find-The-PlaceholderAPI",
+                        ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
+            } else {
+                if (expansion.isRegistered()) {
+                    expansion.unregister();
+                }
+                MessageUtil.setEnabledPAPI(false);
+            }
+        } catch (NoClassDefFoundError | Exception error) {
+            MessageUtil.setEnabledPAPI(false);
+            MessageUtil.sendConsoleMessage("Console-Messages.PlaceholderAPI-Not-Found",
+                    ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
+        }
+    }
+
+    private static void logLifecycleFailure(String message, Throwable error) {
+        Main plugin = Main.getInstance();
+        if (plugin != null) {
+            plugin.getLogger().log(Level.SEVERE, message, error);
+        }
     }
     
     public static void hideEnchants(ItemMeta im) {
@@ -82,19 +178,12 @@ public class PluginControl
         SkullMeta meta = (SkullMeta) is.getItemMeta();
         meta.setOwningPlayer(owner);
         is.setItemMeta(meta);
-        LiteSignInThread.runTask(() -> SkullManager.refreshTexture(uuid, owner.getName() != null ? owner.getName() : name));
+        String lookupName = owner.getName() != null ? owner.getName() : name;
+        LiteSignInThread.runTask(() -> SkullManager.refreshTexture(uuid, lookupName));
     }
     
     public static int getRetroactiveCardQuantityRequired() {
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getInt("Retroactive-Card.Quantity-Required");
-    }
-    
-    public static int getGUILimitedDateYear() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getInt("GUI-Settings.Limit-Date.Minimum-Year");
-    }
-    
-    public static int getGUILimitedDateMonth() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getInt("GUI-Settings.Limit-Date.Minimum-Month");
     }
     
     public static double getRetroactiveCardIntervals() {
@@ -109,16 +198,8 @@ public class PluginControl
         return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("PlaceholderAPI.Enabled");
     }
 
-    public static boolean enableSignInRanking() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Enable-Sign-In-Ranking");
-    }
-
     public static boolean enableSignInGUI() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("GUI-Settings.Enabled");
-    }
-
-    public static boolean enableGUILimitDate() {
-        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("GUI-Settings.Limit-Date.Enabled");
+        return ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("GUI-Settings");
     }
 
      public static boolean enableRetroactiveCard() {
@@ -141,57 +222,29 @@ public class PluginControl
         return SignInDate.getInstance(ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getString("Retroactive-Card.Minimum-Date"));
     }
     
-    public static SignInDate getGUILimitedDate() {
-        return SignInDate.getInstance(getGUILimitedDateYear(), getGUILimitedDateMonth(), 1);
-    }
-    
     public static String getPrefix() {
         return ColorUtils.toColor(ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getString("Prefix"));
     }
     
-    public static ItemStack getRetroactiveCardRequiredItem(Player player) {
-        String itemName = ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getString("Retroactive-Card.Required-Item.CustomItem");
-        if (ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).get("Manual-Settings." + itemName + ".Item") != null) {
-            ItemStack is;
-            try {
-                is = new ItemStack(Material.valueOf(ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getString("Manual-Settings." + itemName + ".Item").toUpperCase()), 1);
-            } catch (IllegalArgumentException ex2) {
-                return null;
-            }
-            if (ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).get("Manual-Settings." + itemName + ".Head-Owner") != null) {
-                Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
-                placeholders.put("{player}", player.getName());
-                PluginControl.setHead(is, MessageUtil.replacePlaceholders(player, ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getString("Manual-Settings." + itemName + ".Head-Owner"), placeholders));
-            }
-            ItemMeta im = is.getItemMeta();
-            if (ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).get("Manual-Settings." + itemName + ".Lore") != null) {
-                List<String> lore = new ArrayList<>();
-                ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getStringList("Manual-Settings." + itemName + ".Lore").stream().forEach(lores -> lore.add(MessageUtil.toPlaceholderAPIResult(player, ColorUtils.toColor(lores))));
-                im.setLore(lore);
-            }
-            if (ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).get("Manual-Settings." + itemName + ".Enchantment") != null) {
-                for (String name : ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getStringList("Manual-Settings." + itemName + ".Enchantment")) {
-                    String[] data = name.split(":");
-                    for (Enchantment enchant : Enchantment.values()) {
-                        if (enchant.getKey().getKey().equalsIgnoreCase(data[0]) || enchant.getKey().toString().equalsIgnoreCase(data[0])) {
-                            try {
-                                im.addEnchant(enchant, Integer.valueOf(data[1]), true);
-                            } catch (NumberFormatException ex) {}
-                        }
-                    }
-                }
-            }
-            if (ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).get("Manual-Settings." + itemName + ".Hide-Enchants") != null) PluginControl.hideEnchants(im);
-            if (ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).get("Manual-Settings." + itemName + ".Display-Name") != null) im.setDisplayName(ColorUtils.toColor(MessageUtil.toPlaceholderAPIResult(player, ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getString("Manual-Settings." + itemName + ".Display-Name"))));
-            is.setItemMeta(im);
-            return is;
-        } else if (ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).get("Item-Collection." + itemName) != null) {
-            ItemStack is = ConfigurationUtil.getConfig(ConfigurationType.CUSTOM_ITEMS).getItemStack("Item-Collection." + itemName);
-            if (is != null) {
-                return is;    
-            }
+    /**
+     * Returns the configured display name used to identify a physical retroactive
+     * card in a player's inventory.
+     *
+     * <p>Physical-card matching is now purely DisplayName-based: only an item's
+     * {@link ItemMeta#getDisplayName() display name} (with color codes) is compared
+     * against this value. Material, lore and enchantments are intentionally ignored
+     * so administrators only need to keep one stable field consistent.
+     *
+     * @return the color-translated display name, or {@code null} when the
+     *         Required-Item feature is disabled or the Name node is missing
+     */
+    public static String getRetroactiveCardRequiredItemName() {
+        if (!enableRetroactiveCardRequiredItem()) {
+            return null;
         }
-        return null;
+        String name = ConfigurationUtil.getConfig(ConfigurationType.CONFIG)
+                .getString("Retroactive-Card.Required-Item.Name");
+        return name == null ? null : ColorUtils.toColor(name);
     }
     
     public static int getRandom(int number1, int number2) {

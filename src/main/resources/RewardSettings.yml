@@ -12,31 +12,20 @@ Reward-Settings:
             Normal-Time:
                 #在签到时发送信息
                 #支持PlaceholderAPI变量
-                Messages: 
+                Messages:
                 - '{prefix}&a签到奖励已获取.'
-                #在签到时奖励物品
-                #在这个选项中，你可以直接填写原版物品的名字，
-                #或者是RewardSettings.yml中（包含手动设置的、用命令添加的）的物品。
-                #格式： "[物品名字|收藏品名字]:[数量]"
-                #示例： "diamond:5" 奖励5个钻石
-                #你可以使用 "[最小值]-[最大值]" 以随机奖励物品的数量。
-                #示例： "diamond:1-3" 随机奖励1-3个钻石。
-                Reward-Items:
-                - 'diamond:1'
-                - 'gold_ingot:3'
-                - 'iron_ingot:6'
                 #在签到时发送广播信息
                 #在此选项中的信息将会被所有人看见
                 Broadcast-Messages: []
                 #在签到时播放声音
                 #格式： [声音]-[音量]-[音调]-[是否所有人都能听见]
-                Play-Sounds: 
+                Play-Sounds:
                 - 'ENTITY_EXPERIENCE_ORB_PICKUP-1-1-FALSE'
                 #在签到时执行命令
                 #格式： "[执行类型]:[命令]"
                 #"执行类型" 可以是 "op" 、 "server"、 无
                 #分别对应 "玩家以OP权限执行命令"、 "执行控制台命令"、"玩家执行命令"
-                #示例： 
+                #示例：
                 # "server:say hello" 在控制台中执行"say hello"命令
                 # "op:gamemode creative" 玩家以OP权限执行"gamemode creative"命令
                 # "spawn" 玩家正常执行"spawn"命令
@@ -52,12 +41,8 @@ Reward-Settings:
                     Statistics-Times: false
                     Statistics-Times-Of-Month: false
                     Statistics-Times-Cycle: false
-                Play-Sounds: 
+                Play-Sounds:
                 - 'ENTITY_EXPERIENCE_ORB_PICKUP-1-1-FALSE'
-                Reward-Items:
-                - 'diamond:1'
-                - 'gold_ingot:3'
-                - 'iron_ingot:6'
             #连续签到一定次数时触发
             Special-Times:
                 #三次
@@ -68,12 +53,8 @@ Reward-Settings:
                     - '{prefix}&a连续签到三天！ 奖励&e翻倍&a！'
                     Broadcast-Messages:
                     - '{prefix}&a玩家 &e{player} &a连续签到了三天!'
-                    Play-Sounds: 
+                    Play-Sounds:
                     - 'ENTITY_PLAYER_LEVELUP-1-0-TRUE'
-                    Reward-Items:
-                    - 'diamond:1'
-                    - 'gold_ingot:3'
-                    - 'iron_ingot:6'
                 #七次
                 7:
                     Override-default-rewards: false
@@ -81,29 +62,22 @@ Reward-Settings:
                     - '{prefix}&a连续签到一周！额外赠送附魔&e&l钻石剑&a与&e&l金苹果&a！'
                     Broadcast-Messages:
                     - '{prefix}&a玩家 &e{player} &a连续签到了一周!'
-                    Play-Sounds: 
+                    Play-Sounds:
                     - 'ENTITY_PLAYER_LEVELUP-1-0-TRUE'
-                    Reward-Items:
-                    - 'Super_Diamond_Sword:1'
-                    - 'golden_apple:1'
             #周期性连续签到一定次数时触发
             Special-Times-Cycle:
                 #每连续签到三天的奖励
                 3:
                     Override-default-rewards: false
-                    Messages: 
+                    Messages:
                     - '{prefix}&a你周期性连续签到了三天，额外奖励一个金苹果！'
-                    Reward-Items:
-                    - 'golden_apple:1'
             #特别周签到时触发
             Special-Weeks:
                 #周日
                 7:
                     Override-default-rewards: false
-                    Messages: 
+                    Messages:
                     - '{prefix}&a今天是周末，额外奖励一个金苹果！'
-                    Reward-Items:
-                    - 'golden_apple:1'
             #签到累计达到一定次数时触发
             Statistics-Times:
                 100:
@@ -124,10 +98,8 @@ Reward-Settings:
                 #格式: MM-dd （月-日）注意不要把如一月一号写成“1-1”，而是“01-01”
                 '12-25':
                     Override-default-rewards: false
-                    Messages: 
+                    Messages:
                     - '{prefix}&a今天是圣诞节， 圣诞节快乐！'
-                    Reward-Items:
-                    - 'apple:64'
             #在特殊时间段进行签到时触发
             Special-Time-periods:
                 #格式： 时:分:秒， 从左往右
@@ -144,46 +116,32 @@ Reward-Settings:
                     #“23:59:59” 在这里表示将会在每一天的22:30:00到23:59:59签到时触发
                     Time-Limit: '23:59:59'
                     Override-default-rewards: false
-                    Messages: 
+                    Messages:
                     - '{prefix}&a夜已深， 注意休息！'
-                    #深夜一杯牛奶助眠（误）
-                    Reward-Items:
-                    - 'milk_bucket:1'
                 #凌晨三点
                 '03:00:00':
                     Option: Before_This_Time #在03:00:00之前签到
                     #03:00:00前到00:00:00时签到时触发
                     Time-Limit: '00:00:00'
                     Override-default-rewards: false
-                    Messages: 
+                    Messages:
                     - '{prefix}&a夜已深， 注意休息！'
-                    Reward-Items:
-                    - 'milk_bucket:1'
-            #每日签到时得到指定名次时触发
+            #仅供 /signin reward 手动发放 SPECIAL_RANKING:[名次] 奖励
             Special-Ranking:
                 #全服第一名
                 '1':
                     Override-default-rewards: false
-                    Messages: 
+                    Messages:
                     - '{prefix}&a你今天是全服第一个签到的玩家，奖励翻倍！'
-                    Reward-Items:
-                    - 'diamond:1'
-                    - 'gold_ingot:3'
-                    - 'iron_ingot:6'
             #每月连续签到一定次数时触发
             Special-Times-Of-Month:
                 #十五次
                 15:
                     #生效的月份，请填入月份对应的数字
                     Valid-Months: [1, 2, 3] #即为每年一月、二月、三月生效
-                    #是否覆盖正常签到下的奖励
                     Override-default-rewards: true
-                    Messages: 
+                    Messages:
                     - '{prefix}&a本月连续签到达到了15天，签到奖励&e翻倍&a！'
-                    Reward-Items:
-                    - 'diamond:1'
-                    - 'gold_ingot:3'
-                    - 'iron_ingot:6'
             #每月签到累计达到一定次数时触发
             Statistics-Times-Of-Month:
                 #十五次
@@ -203,50 +161,33 @@ Reward-Settings:
             #前提是你没有搞错组与组之间的优先级！
             Permission: signin.reward.vip
             Normal-Time:
-                Messages: 
+                Messages:
                 - '{prefix}&a签到奖励已获取.'
-                Reward-Items:
-                - 'diamond:3'
-                - 'gold_ingot:9'
-                - 'iron_ingot:12'
-                Commands: 
+                Commands:
                 - 'server:points give {player} 10'
             Retroactive-Time:
                 Disabled-Modules:
                     Special-Dates: true
                     Special-Times: true
-                Reward-Items:
-                - 'diamond:2'
-                - 'gold_ingot:6'
-                - 'iron_ingot:12'
             Special-Times:
                 3:
                     Override-default-rewards: true
-                    Messages: 
+                    Messages:
                     - '{prefix}&a连续签到三天！ 奖励&e翻倍&a！'
-                    Reward-Items:
-                    - 'diamond:6'
-                    - 'gold_ingot:18'
-                    - 'iron_ingot:24'
-                    Commands: 
+                    Commands:
                     - 'server:points give {player} 20'
                 7:
                     Override-default-rewards: false
-                    Messages: 
+                    Messages:
                     - '{prefix}&a连续签到一周！额外赠送附魔&e&l钻石剑&a与&e&l金苹果&a！'
-                    Reward-Items:
-                    - 'Super_Diamond_Sword:1'
-                    - 'golden_apple:1'
             Statistics-Times:
                 100:
-                    Messages: 
+                    Messages:
                     - '{prefix}&a签到次数总计达到100次，获得&e10000&a游戏硬币。'
                     Commands:
                     - 'server:eco give {player} 10000'
             Special-Dates:
                 '12-25':
                     Override-default-rewards: false
-                    Messages: 
+                    Messages:
                     - '{prefix}&a今天是圣诞节， 圣诞节快乐！'
-                    Reward-Items:
-                    - 'apple:64'

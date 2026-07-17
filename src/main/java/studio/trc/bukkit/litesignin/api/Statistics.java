@@ -1,10 +1,9 @@
 package studio.trc.bukkit.litesignin.api;
 
-import java.text.DecimalFormat;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import studio.trc.bukkit.litesignin.util.SignInDate;
 import studio.trc.bukkit.litesignin.util.PluginControl;
@@ -15,14 +14,49 @@ import studio.trc.bukkit.litesignin.util.PluginControl;
  */
 public interface Statistics
 {
-    public static Map<UUID, Long> lastSignInTime = new HashMap();
-    
-    default boolean isRetroactiveCardCooldown() {
-        return lastSignInTime.containsKey(getUserUUID()) && System.currentTimeMillis() - lastSignInTime.get(getUserUUID()) <= PluginControl.getRetroactiveCardIntervals() * 1000;
+    Map<UUID, Long> lastSignInTime = new ConcurrentHashMap<>();
+
+    static void recordRetroactiveSignIn(UUID uuid) {
+        if (uuid != null) {
+            lastSignInTime.put(uuid, System.currentTimeMillis());
+        }
     }
-    
+
+    static void clearRetroactiveCooldown(UUID uuid) {
+        if (uuid != null) {
+            lastSignInTime.remove(uuid);
+        }
+    }
+
+    static void clearRetroactiveCooldowns() {
+        lastSignInTime.clear();
+    }
+
+    default boolean isRetroactiveCardCooldown() {
+        Long lastSignIn = lastSignInTime.get(getUserUUID());
+        if (lastSignIn == null) {
+            return false;
+        }
+        boolean coolingDown = System.currentTimeMillis() - lastSignIn
+                <= PluginControl.getRetroactiveCardIntervals() * 1000D;
+        if (!coolingDown) {
+            lastSignInTime.remove(getUserUUID(), lastSignIn);
+        }
+        return coolingDown;
+    }
+
     default double getRetroactiveCardCooldown() {
-        return lastSignInTime.containsKey(getUserUUID()) ? Double.valueOf(new DecimalFormat("#.0").format(PluginControl.getRetroactiveCardIntervals() - ((double) (System.currentTimeMillis() - lastSignInTime.get(getUserUUID())) / 1000))) : 0;
+        Long lastSignIn = lastSignInTime.get(getUserUUID());
+        if (lastSignIn == null) {
+            return 0D;
+        }
+        double remaining = PluginControl.getRetroactiveCardIntervals()
+                - (System.currentTimeMillis() - lastSignIn) / 1000D;
+        if (remaining <= 0D) {
+            lastSignInTime.remove(getUserUUID(), lastSignIn);
+            return 0D;
+        }
+        return Math.round(remaining * 10D) / 10D;
     }
     
     public UUID getUserUUID();

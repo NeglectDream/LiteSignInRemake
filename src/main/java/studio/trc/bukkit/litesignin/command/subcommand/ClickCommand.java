@@ -10,13 +10,14 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import studio.trc.bukkit.litesignin.api.SignInResult;
 import studio.trc.bukkit.litesignin.api.Storage;
 import studio.trc.bukkit.litesignin.command.SignInSubCommand;
 import studio.trc.bukkit.litesignin.command.SignInSubCommandType;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.queue.SignInQueue;
+import studio.trc.bukkit.litesignin.service.SignInService;
 import studio.trc.bukkit.litesignin.util.OnlineTimeRecord;
 import studio.trc.bukkit.litesignin.util.PluginControl;
 import studio.trc.bukkit.litesignin.util.SignInDate;
@@ -37,16 +38,18 @@ public class ClickCommand
                 }
                 Storage data = Storage.getPlayer(player);
                 if (data.alreadySignIn()) {
-                    placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
                     placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
                     MessageUtil.sendCommandMessage(player, "Click.To-Self.Today-has-been-Signed-In", placeholders);
                 } else {
                     long requirement = OnlineTimeRecord.getSignInRequirement(player);
                     if (requirement == -1) {
-                        data.signIn();
-                        placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
-                        placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
-                        MessageUtil.sendCommandMessage(player, "Click.To-Self.Successfully-Signed-In", placeholders);
+                        SignInResult result = data.trySignIn();
+                        if (result.isSuccess()) {
+                            placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
+                            MessageUtil.sendCommandMessage(player, "Click.To-Self.Successfully-Signed-In", placeholders);
+                        } else {
+                            reportFailure(sender, result);
+                        }
                     } else {
                         placeholders.put("{minute}", String.valueOf(requirement / 60000 + 1));
                         MessageUtil.sendMessage(player, ConfigurationUtil.getConfig(ConfigurationType.MESSAGES), "Insufficient-Online-Time", placeholders);
@@ -66,20 +69,21 @@ public class ClickCommand
                     Storage data = Storage.getPlayer(player);
                     if (data.alreadySignIn()) {
                         placeholders.put("{player}", player.getName());
-                        placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
                         placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
                         MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Today-has-been-Signed-In", placeholders);
                     } else {
-                        data.signIn();
-                        placeholders.put("{player}", player.getName());
-                        placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
-                        placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
-                        MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Successfully-Signed-In", placeholders);
-                        Map<String, String> placeholders_2 = MessageUtil.getDefaultPlaceholders();
-                        placeholders_2.put("{admin}", sender.getName());
-                        placeholders_2.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
-                        placeholders_2.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
-                        MessageUtil.sendCommandMessage(player, "Click.To-Other-Player.Messages-at-Sign-In", placeholders_2);
+                        SignInResult result = data.trySignIn();
+                        if (result.isSuccess()) {
+                            placeholders.put("{player}", player.getName());
+                            placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
+                            MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Successfully-Signed-In", placeholders);
+                            Map<String, String> placeholders_2 = MessageUtil.getDefaultPlaceholders();
+                            placeholders_2.put("{admin}", sender.getName());
+                            placeholders_2.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
+                            MessageUtil.sendCommandMessage(player, "Click.To-Other-Player.Messages-at-Sign-In", placeholders_2);
+                        } else {
+                            reportFailure(sender, result);
+                        }
                     }
                 } else {
                     if (args[1].isEmpty()) {
@@ -92,15 +96,17 @@ public class ClickCommand
                         Storage data = Storage.getPlayer(offlineplayer.getUniqueId());
                         if (data.alreadySignIn()) {
                             placeholders.put("{player}", offlineplayer.getName());
-                            placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
                             placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
                             MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Today-has-been-Signed-In", placeholders);
                         } else {
-                            data.signIn();
-                            placeholders.put("{player}", offlineplayer.getName());
-                            placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
-                            placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
-                            MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Successfully-Signed-In", placeholders);
+                            SignInResult result = data.trySignIn();
+                            if (result.isSuccess()) {
+                                placeholders.put("{player}", offlineplayer.getName());
+                                placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
+                                MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Successfully-Signed-In", placeholders);
+                            } else {
+                                reportFailure(sender, result);
+                            }
                         }
                     } else {
                         placeholders.put("{player}", args[1]);
@@ -128,7 +134,7 @@ public class ClickCommand
                         return;
                     }
                     Storage data = Storage.getPlayer(player);
-                    if (!LiteSignInUtils.hasPermission(sender, "Retroactive-Card.Use") && data.getRetroactiveCard() > 0) {
+                    if (!LiteSignInUtils.hasPermission(sender, "Retroactive-Card.Hold") && data.getRetroactiveCard() > 0) {
                         data.takeRetroactiveCard(data.getRetroactiveCard());
                         MessageUtil.sendCommandMessage(sender, "Click.To-Self.Unable-To-Hold");
                     } else if (data.isRetroactiveCardCooldown()) {
@@ -144,11 +150,14 @@ public class ClickCommand
                         placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
                         MessageUtil.sendCommandMessage(sender, "Click.To-Self.Specified-Date-has-been-Signed-In", placeholders);
                     } else if (data.getRetroactiveCard() >= PluginControl.getRetroactiveCardQuantityRequired()) {
-                        data.takeRetroactiveCard(PluginControl.getRetroactiveCardQuantityRequired());
-                        data.signIn(date);
-                        placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
-                        placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
-                        MessageUtil.sendCommandMessage(sender, "Click.To-Self.Successfully-Retroactive-Signed-In", placeholders);
+                        SignInResult result = SignInService.retroactiveSignIn(data, date, true);
+                        if (result.isSuccess()) {
+                            placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
+                            placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
+                            MessageUtil.sendCommandMessage(sender, "Click.To-Self.Successfully-Retroactive-Signed-In", placeholders);
+                        } else {
+                            reportFailure(sender, result);
+                        }
                     } else {
                         placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
                         placeholders.put("{cards}", String.valueOf(PluginControl.getRetroactiveCardQuantityRequired() - data.getRetroactiveCard()));
@@ -190,18 +199,20 @@ public class ClickCommand
                     placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
                     MessageUtil.sendCommandMessage(sender, "Click.Invalid-Date", placeholders);
                 } else {
-                    data.signIn(date);
-                    placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
-                    placeholders.put("{player}", player.getName());
-                    placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
-                    placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
-                    MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Successfully-Retroactive-Signed-In", placeholders);
-                    Map<String, String> placeholders_2 = MessageUtil.getDefaultPlaceholders();
-                    placeholders_2.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
-                    placeholders_2.put("{admin}", sender.getName());
-                    placeholders_2.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
-                    placeholders_2.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
-                    MessageUtil.sendCommandMessage(player, "Click.To-Other-Player.Messages-at-Retroactive-Sign-In", placeholders_2);
+                    SignInResult result = SignInService.retroactiveSignIn(data, date, false);
+                    if (result.isSuccess()) {
+                        placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
+                        placeholders.put("{player}", player.getName());
+                        placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
+                        MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Successfully-Retroactive-Signed-In", placeholders);
+                        Map<String, String> placeholders_2 = MessageUtil.getDefaultPlaceholders();
+                        placeholders_2.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
+                        placeholders_2.put("{admin}", sender.getName());
+                        placeholders_2.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
+                        MessageUtil.sendCommandMessage(player, "Click.To-Other-Player.Messages-at-Retroactive-Sign-In", placeholders_2);
+                    } else {
+                        reportFailure(sender, result);
+                    }
                 }
             } else {
                 if (args[2].isEmpty()) {
@@ -227,19 +238,21 @@ public class ClickCommand
                     if (data.alreadySignIn(date)) {
                         placeholders.put("{player}", offlineplayer.getName());
                         placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
-                        placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
                         placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
                         MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Specified-Date-has-been-Signed-In", placeholders);
                     } else if (SignInDate.getInstance(new Date()).compareTo(date) < 0) {
                         placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
                         MessageUtil.sendCommandMessage(sender, "Click.Invalid-Date", placeholders);
                     } else {
-                        data.signIn(date);
-                        placeholders.put("{player}", offlineplayer.getName());
-                        placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
-                        placeholders.put("{queue}", String.valueOf(SignInQueue.getInstance().getRank(data.getUserUUID())));
-                        placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
-                        MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Successfully-Retroactive-Signed-In", placeholders);
+                        SignInResult result = SignInService.retroactiveSignIn(data, date, false);
+                        if (result.isSuccess()) {
+                            placeholders.put("{player}", offlineplayer.getName());
+                            placeholders.put("{date}", date.getName(MessageUtil.getMessage("Command-Messages.Click.Date-Format")));
+                            placeholders.put("{continuous}", String.valueOf(data.getContinuousSignIn()));
+                            MessageUtil.sendCommandMessage(sender, "Click.To-Other-Player.Successfully-Retroactive-Signed-In", placeholders);
+                        } else {
+                            reportFailure(sender, result);
+                        }
                     }
                 } else {
                     placeholders.put("{player}", args[2]);
@@ -247,6 +260,12 @@ public class ClickCommand
                 }
             }
         }
+    }
+
+    private static void reportFailure(CommandSender sender, SignInResult result) {
+        Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
+        placeholders.put("{result}", result.name());
+        MessageUtil.sendCommandMessage(sender, "Click.Operation-Failed", placeholders);
     }
 
     @Override

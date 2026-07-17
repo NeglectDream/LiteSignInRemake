@@ -5,9 +5,6 @@ import java.util.List;
 
 import lombok.Getter;
 
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.reward.util.SignInGroup;
@@ -42,11 +39,6 @@ public class SignInNormalReward
     @Override
     public List<SignInRewardCommand> getCommands() {
         return super.getCommands("Reward-Settings.Permission-Groups." + group.getGroupName() + ".Normal-Time.Commands");
-    }
-
-    @Override
-    public List<ItemStack> getRewardItems(Player player) {
-        return super.getRewardItems(player, "Reward-Settings.Permission-Groups." + group.getGroupName() + ".Normal-Time.Reward-Items");
     }
 
     @Override

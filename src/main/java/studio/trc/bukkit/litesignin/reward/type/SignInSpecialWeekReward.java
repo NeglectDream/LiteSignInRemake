@@ -5,9 +5,6 @@ import java.util.List;
 
 import lombok.Getter;
 
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.reward.SignInRewardColumn;
@@ -53,11 +50,6 @@ public class SignInSpecialWeekReward
     @Override
     public List<SignInRewardCommand> getCommands() {
         return super.getCommands("Reward-Settings.Permission-Groups." + group.getGroupName() + ".Special-Weeks." + week + ".Commands");
-    }
-
-    @Override
-    public List<ItemStack> getRewardItems(Player player) { 
-        return super.getRewardItems(player, "Reward-Settings.Permission-Groups." + group.getGroupName() + ".Special-Weeks." + week + ".Reward-Items");
     }
 
     @Override

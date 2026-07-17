@@ -37,16 +37,6 @@ public enum SignInSubCommandType
     INFO("info", new InfoCommand(), "Info"),
 
     /**
-     * /signin leaderboard
-     */
-    LEADERBOARD("leaderboard", new LeaderboardCommand(), "LeaderBoard"),
-    
-    /**
-     * /signin itemcollection
-     */
-    ITEM_COLLECTION("itemcollection", new ItemCollectionCommand(), "ItemCollection"),
-    
-    /**
      * /signin retroactivecard
      */
     RETROACTIVE_CARD("retroactivecard", new RetroactiveCardCommand(), "RetroactiveCard"),

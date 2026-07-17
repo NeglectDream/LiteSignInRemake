@@ -24,20 +24,20 @@ Join-Event:
     - '{prefix}&a&l你今天还没有签到! %opengui%'
 GUI-SignIn-Messages:
     Unavailable-Feature: '{prefix}&c本服务器未启用签到菜单'
-    Minimum-GUI-Date: '{prefix}&c你不可以打开&e{year}&c年&e{month}&c月之前的签到菜单！'
     Retroactive-Card-Cooldown:
     - '{prefix}&e你需要等待 &c{second} &e秒才可以再次使用补签卡!'
     Unable-To-Hold:
     - '{prefix}&c你没有权限持有补签卡， 系统已将你的所有补签卡进行回收。'
     Minimum-Date:
     - '{prefix}&c你不可以对 &e{date} &c以前的日期进行补签。'
+    Operation-Failed:
+    - '{prefix}&c签到未完成（{result}），未扣除补签卡或执行成功奖励。'
     SignIn-Messages:
     - '&6▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
     - ''
     - '  {prefix}&d今日签到已完成!'
     - ''
     - '  &c# &a您已连续签到 &e{continuous} &a天'
-    - '  &c# &a您今天是全服第 &b{queue} &a个签到的玩家'
     - ''
     - '&6▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
     Need-More-Retroactive-Cards:
@@ -56,22 +56,23 @@ Command-Messages:
     - ' &6/signin save &c保存所有在线玩家的数据'
     - ' &6/signin reward [玩家名字] [权限组名] [奖励类型]&7:[对应值] &c直接给予玩家签到奖励'
     - ' &6/signin info [玩家] &c查看玩家的信息'
-    - ' &6/signin leaderboard &8[日期] [页数] &c列出今日或指定日期的签到排行榜'
     - ' &6/signin itemcollection &c管理收藏品'
     Reload: '{prefix}&a已重载配置文件.'
+    Reload-Failed: '{prefix}&c重载失败，已保留原数据库连接。请查看控制台错误。'
     RetroactiveCard:
-        Help: '{prefix}&a使用帮助: &6/signin retroactivecard &c[give/set/take] &d[数量] &7[玩家] &a给予/设置/取走玩家身上的补签卡'
+        Help: '{prefix}&a补签卡发放/扣除请使用服务器的统一物品管理器，本插件仅在补签时按 &eRetroactive-Card.Required-Item.Name &a检索玩家背包并扣除。'
         Unavailable-Feature: '{prefix}&c本服务器未启用补签卡功能。'
-        Invalid-Number: '{prefix}&c无效的数字 &e{number} &c!'
-        Player-Offline: '{prefix}&c玩家 &e{player} &c未在线!'
+        Physical-Mode-Unsupported: '{prefix}&c物理卡模式下不支持 give/set/take 子命令，请使用服务器统一物品管理器发放/管理补签卡。'
+        Give: '{prefix}&a已给予 &e{player} &a{amount} 张补签卡。'
+        Set: '{prefix}&a已将 &e{player} &a的补签卡数量设为 &e{amount} &a张。'
+        Take: '{prefix}&a已从 &e{player} &a扣除 &e{amount} &a张补签卡。'
+        Invalid-Number: '{prefix}&c数量 &e{number} &c无效，必须为整数。'
         Player-Not-Exist: '{prefix}&c玩家 &e{player} &c不存在!'
-        Give: '{prefix}&a成功给予 &c{amount} &a个补签卡给玩家 &e{player} &a.'
-        Set: '{prefix}&a成功将玩家 &e{player} &a的补签卡数量设置为 &c{amount} &a个.'
-        Take: '{prefix}&a成功从玩家 &e{player} &a身上取走 &c{amount} &a个补签卡.'
-    Click: 
+    Click:
         Player-Not-Exist: '{prefix}&c玩家 &e{player} &c不存在!'
         Date-Format: 'yyyy年MM月dd日'
         Invalid-Date: '{prefix}&c无效的日期 &e{date} &c! 例: /signin click 2015-8-11'
+        Operation-Failed: '{prefix}&c签到未完成（{result}），未执行成功奖励。'
         To-Self:
             Today-has-been-Signed-In: '{prefix}&c您今天已经签到了，请不要重复签到。'
             Specified-Date-has-been-Signed-In: '{prefix}&c日期 &e{date} &c已经签到了， 请不要重复签到.'
@@ -83,7 +84,6 @@ Command-Messages:
             - '  {prefix}&d今日签到已完成!'
             - ''
             - '  &c# &a您已连续签到 &e{continuous} &a天'
-            - '  &c# &a您今天是全服第 &b{queue} &a个签到的玩家'
             - ''
             - '&6▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
             Unable-To-Hold:
@@ -160,94 +160,6 @@ Command-Messages:
             STATISTICS: '{prefix}&c参数无效， 请检查&aRewardSettings.yml&c文件中是否设置了关于权限组 &e{group} &c在&aStatistics-Times&c中的总计签到次数 &b&l{value} &c次的奖励。'
             STATISTICS_CYCLE: '{prefix}&c参数无效， 请检查&aRewardSettings.yml&c文件中是否设置了关于权限组 &e{group} &c在&aStatistics-Times-Cycle&c中的总计签到次数 &b&l{value} &c次的奖励。'
             STATISTICS_OF_MONTH: '{prefix}&c参数无效， 请检查&aRewardSettings.yml&c文件中是否设置了关于权限组 &e{group} &c在&aStatistics-Times-Of-Month&c中的每月总计签到次数 &b&l{value} &c次的奖励。'
-    LeaderBoard:
-        #每一页显示多少个玩家
-        Number-Of-Single-Page: 10
-        Date-Format: 'yyyy年MM月dd日'
-        Time-Format: 'HH:mm:ss'
-        Unknown-Player: '&3未知玩家&8(UUID:{uuid})'
-        Unknown-Time: '&e补签'
-        Player-Show:
-            Text:
-                Self: '&2{player}'
-                Other-Players: '&3{player}'
-            Command: 'litesignin info {player}'
-            Hover:
-            - '&5点击查看玩家 &e{player} &5的个人信息'
-        Previous-Page:
-            Text: '&b&l上一页'
-            Hover:
-            - '&5点击转到上一页'
-            - '&7当前页数: &e{page}'
-            - '&7上一页: &e{previousPage}'
-        Next-Page:
-            Text: '&b&l下一页'
-            Hover:
-            - '&5点击转到下一页'
-            - '&7当前页数: &e{page}'
-            - '&7下一页: &e{nextPage}'
-        Invalid-Number: '{prefix}&c您所指定的页数 &e{page} &c不存在! 请输入有效的数字!'
-        Date-Not-Exist: '{prefix}&c您所指定的日期 &e{date} &c无效! 请输入正确的日期! &7(年-月-日)'
-        List-Format:
-            Today:
-                Usually:
-                    Self: '  &4# &b&l{ranking}&f. %player% &5&l- &c&n{time}&f &7<- 我在这.'
-                    Other-Players: '  &c# &e{ranking}&f. %player% &5&l- &e{time}'
-                Tiel-Ranking:
-                    Self: '  &4# &b&l{ranking}&f. %player% &5&l- &c&n{time}&f &5[并列第{ranking}名] &7<- 我在这.'
-                    Other-Players: '  &c# &e{ranking}&f. %player% &5&l- &e{time} &5[并列第{ranking}名]'
-            Historical-Date:
-                Usually:
-                    Self: '  &4# &b&l{ranking}&f. %player% &5&l- &c&n{time}&f &7<- 我在这.'
-                    Other-Players: '  &c# &e{ranking}&f. %player% &5&l- &e{time}'
-                Tiel-Ranking:
-                    Self: '  &4# &b&l{ranking}&f. %player% &5&l- &c&n{time}&f &5[并列第{ranking}名] &7<- 我在这.'
-                    Other-Players: '  &c# &e{ranking}&f. %player% &5&l- &e{time} &5[并列第{ranking}名]'
-        Empty: '{prefix}&a日期 &e{date} &a没有任何人签到.'
-        Non-Database-mode: '{prefix}&e仅 &bSQLite &e储存模式才能够查询过往日期的签到排名!'
-        LeaderBoard-Messages:
-        - '{prefix}&e&l签到排行榜 &d{date}'
-        - '&8▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
-        - '  &a签到总人数 &e&l{total} &a人 &c&l| &a当前页数 &6&l{page}&7/&6&l{maxPage} &a页'
-        - '  %leaderboard%'
-        - '  &a<<< %previousPage% &c&l| %nextPage% &a>>>'
-        - '&8▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
-        Historical-Date-LeaderBoard-Messages:
-        - '{prefix}&e&l历史日期 &d{date} &e&l签到排行榜'
-        - '&8▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
-        - '  &a签到总人数 &e&l{total} &a人 &c&l| &a当前页数 &6&l{page}&7/&6&l{maxPage} &a页'
-        - '  %leaderboard%'
-        - '  &a<<< %previousPage% &c&l| %nextPage% &a>>>'
-        - '&8▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
-    ItemCollection:
-        Help: 
-            - '{prefix}&a使用帮助 &f&l>>>'
-            - ' &6/signin itemcollection list &c列出所有收藏品'
-            - ' &6/signin itemcollection add [名称] &c将手上的物品添加到收藏品列表'
-            - ' &6/signin itemcollection delete [名称] &c删除指定的收藏品'
-            - ' &6/signin itemcollection give [名称] &8[玩家] &c将指定的收藏品给予自己或其他玩家'
-            - '&c&l说明: &d收藏品功能能够将一些包含复杂的NBT的物品序列化并添加至&aCustomItems.yml&b文件中，'
-            - '&d你可以在&aRewardSettings.yml&d文件的&bReward-Items&d选项中添加收藏品的名字以设置签到奖励所给予的物品， 详细的请查看配置文件中的注释说明.'
-        List:
-            Empty: '{prefix}&a收藏品列表是空的。'
-            Messages:
-            - '{prefix}&a当前一共有 &e{amount} &a件收藏品， 收藏品列表如下: &c%list%'
-            - '&d你可以在&aRewardSettings.yml&d文件的&bReward-Items&d选项中添加以上收藏品的名字以设置签到奖励所给予的物品， 详细的请查看配置文件中的注释说明.'
-        Add:
-            Help: '{prefix}&c使用方法: &6/signin itemcollection add [名称]'
-            Doesnt-Have-Item-In-Hand: '{prefix}&c你需要将需要执行操作的物品拿在手上!'
-            Successfully: '{prefix}&a成功将你手上的物品 &r%item% &a名字: &e{name} &a添加到收藏品列表中.'
-            Already-Exist: '{prefix}&c收藏品名字 &e{name} &c的物品已存在!'
-        Delete:
-            Help: '{prefix}&c使用方法: &6/signin itemcollection delete [名称]'
-            Successfully: '{prefix}&a成功将物品 &r%item% &a名字: &e{name} &a从收藏品列表中删除.'
-            Not-Exist: '{prefix}&c收藏品名字 &e{name} &c的物品不存在! 请使用&a/signin itemcollection list&c列出所有收藏品!'
-        Give:
-            Help: '{prefix}&c使用方法: &6/signin itemcollection give [名称] [玩家]'
-            Player-Offline: '{prefix}&c玩家 &e{player} &c不在线!'
-            Give-Yourself: '{prefix}&a已将物品 &r%item% &a名字: &e{name} &a给予自己。'
-            Give-Others: '{prefix}&a已将物品 &r%item% &a名字: &e{name} &a给予玩家 &c{player} &a.'
-            Not-Exist: '{prefix}&c收藏品名字 &e{name} &c的物品不存在! 请使用&a/signin itemcollection list&c列出所有收藏品!'
     Info:
         Help: '{prefix}&a使用帮助: &6/signin info &7[玩家] &a查看玩家的信息'
         true: '&a是'
@@ -259,7 +171,6 @@ Command-Messages:
         - '&6 玩家 &a{player} &6的信息: '
         - '&6 今日是否签到: {signin}'
         - '&6 所在权限组名: &5{group}'
-        - '&6 今日签到排名: &3{queue}'
         - '&6 补签卡的数量: &d{retroactivecard}'
         - '&6 连续签到天数: &b{continuous}'
         - '&6 总共签到天数: &e{total}'

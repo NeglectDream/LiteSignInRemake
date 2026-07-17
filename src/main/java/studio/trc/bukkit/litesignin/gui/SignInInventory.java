@@ -13,9 +13,9 @@ import studio.trc.bukkit.litesignin.util.SignInDate;
 /**
  * The sign-in menu snapshot.
  * <p>
- * Keeps a defensive snapshot of the title, contents and button metadata so the
- * menu can be rendered by PacketEvents. The menu is no longer backed by a
- * runtime Bukkit {@code Inventory}; callers consume the contents directly.
+ * Keeps a defensive snapshot of the title, contents and button metadata.
+ * Bukkit owns a real empty container for interaction and protocol state, while
+ * PacketEvents renders these snapshot items into authoritative server packets.
  */
 public class SignInInventory
 {
@@ -108,7 +108,16 @@ public class SignInInventory
     }
 
     private static List<SignInGUIColumn> cloneButtons(List<SignInGUIColumn> buttons) {
-        return buttons != null ? new ArrayList<>(buttons) : new ArrayList<>();
+        List<SignInGUIColumn> copy = new ArrayList<>();
+        if (buttons == null) {
+            return copy;
+        }
+        for (SignInGUIColumn column : buttons) {
+            if (column != null) {
+                copy.add(column.copy());
+            }
+        }
+        return copy;
     }
 
     private static ItemStack[] cloneContents(ItemStack[] contents) {

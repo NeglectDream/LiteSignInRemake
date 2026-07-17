@@ -8,8 +8,6 @@ import java.util.Map;
 import lombok.Getter;
 
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
@@ -61,11 +59,6 @@ public class SignInRetroactiveTimeReward
     @Override
     public List<SignInRewardCommand> getCommands() {
         return super.getCommands("Reward-Settings.Permission-Groups." + group.getGroupName() + ".Retroactive-Time.Commands");
-    }
-
-    @Override
-    public List<ItemStack> getRewardItems(Player player) {
-        return super.getRewardItems(player, "Reward-Settings.Permission-Groups." + group.getGroupName() + ".Retroactive-Time.Reward-Items");
     }
 
     @Override

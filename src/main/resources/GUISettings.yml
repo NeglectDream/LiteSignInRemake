@@ -11,11 +11,6 @@ SignIn-GUI-Settings:
             Lore: 
             - ''
             - '&f您已连续签到 &e{continuous} 天&f，继续坚持！'
-            - ''
-            - '&e点击查看 &d{date} &e的排行榜'
-            Close-GUI: true
-            Commands:
-            - 'litesignin leaderboard {dateText}'
         Comming-Soon:
             Item: PLAYER_HEAD
             Head-Textures: 'eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvODlhOTk1OTI4MDkwZDg0MmQ0YWZkYjIyOTZmZmUyNGYyZTk0NDI3MjIwNWNlYmE4NDhlZTQwNDZlMDFmMzE2OCJ9fX0='

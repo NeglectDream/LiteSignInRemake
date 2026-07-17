@@ -13,7 +13,6 @@ This is a plug-in for recording player check-in data, and rewards players for ch
 - Sign in reward function  
 - Sign in reward task sequence  
 - Support multiple reward modes such as rewards for continuous check-in, total rewards for check-in, rewards for check-in on a specified date, etc.  
-- Sign in leaderboard.  
 - Sign-in reminder at join (or automatic sign-in)  
 - Give sign-in rewards directly (use /signin reward)  
 - Support PlaceholderAPI  
@@ -21,7 +20,6 @@ This is a plug-in for recording player check-in data, and rewards players for ch
 - Support SQLite storage  
 - Support the use of retroactive cards for re sign-in  
 - Support multiple permission groups, users in different groups will enjoy different rewards  
-- Support sign-in ranking function  
 - Database backup  
 - Database rollback(Need to use with backup function)  
 - All permission nodes, Messages, and GUI settings can be customized (But you have to remember that this is not a custom menu plugin)  
@@ -37,7 +35,6 @@ And more...
 |/signin gui [month] | Open the Sign In GUI menu.
 |/signin click [Date or playerName] [playerName] | Sign in now, or sign in for historical date.
 |/signin save | Save data for all online players.
-|/signin leaderboard [Date] [Page] | View the sign-in leaderboard for today or a specified date.
 |/signin database [backup/rollback/confirm] | Database managements
 |/signin info [playerName] | View player's information.
 |/signin itemcollection | Collection of management items.

@@ -5,9 +5,6 @@ import java.util.List;
 
 import lombok.Getter;
 
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.reward.util.SignInGroup;
@@ -65,11 +62,6 @@ public class SignInSpecialTimePeriodReward
     public List<SignInRewardCommand> getCommands() {
         if (!isAvailable()) return new ArrayList<>();
         return super.getCommands("Reward-Settings.Permission-Groups." + group.getGroupName() + ".Special-Time-periods." + setting + ".Commands");
-    }
-
-    @Override
-    public List<ItemStack> getRewardItems(Player player) {
-        return isAvailable() ? super.getRewardItems(player, "Reward-Settings.Permission-Groups." + group.getGroupName() + ".Special-Time-periods." + setting + ".Reward-Items") : new ArrayList<>();
     }
 
     @Override

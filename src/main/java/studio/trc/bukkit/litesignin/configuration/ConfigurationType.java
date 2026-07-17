@@ -9,6 +9,8 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import lombok.Getter;
 
@@ -38,12 +40,9 @@ public enum ConfigurationType
     /**
      * RewardSettings.yml
      */
-    REWARD_SETTINGS("RewardSettings.yml", new YamlConfiguration()),
+    REWARD_SETTINGS("RewardSettings.yml", new YamlConfiguration());
 
-    /**
-     * CustomItems.yml
-     */
-    CUSTOM_ITEMS("CustomItems.yml", new YamlConfiguration());
+    private static final Logger LOGGER = Logger.getLogger(ConfigurationType.class.getName());
 
     @Getter
     private final String fileName;
@@ -76,7 +75,7 @@ public enum ConfigurationType
                 }
             }
         } catch (IOException ex) {
-            ex.printStackTrace();
+            logFailure("Failed to save default configuration " + fileName, ex);
         }
     }
 
@@ -84,7 +83,7 @@ public enum ConfigurationType
         try {
             config.save("plugins/LiteSignIn/" + fileName);
         } catch (IOException ex) {
-            ex.printStackTrace();
+            logFailure("Failed to save configuration " + fileName, ex);
         }
     }
 
@@ -107,10 +106,19 @@ public enum ConfigurationType
                 config.load(newConfig);
                 MessageUtil.sendConsoleMessage("Console-Messages.Configuration-Repair", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
             } catch (IOException | InvalidConfigurationException ex1) {
-                ex1.printStackTrace();
+                logFailure("Failed to repair configuration " + fileName, ex1);
             }
         }
         return false;
+    }
+
+    private static void logFailure(String message, Throwable error) {
+        Main plugin = Main.getInstance();
+        if (plugin != null) {
+            plugin.getLogger().log(Level.SEVERE, message, error);
+        } else {
+            LOGGER.log(Level.SEVERE, message, error);
+        }
     }
 
     public String getLocalFilePath() {

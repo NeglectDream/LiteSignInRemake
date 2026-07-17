@@ -1,8 +1,8 @@
 package studio.trc.bukkit.litesignin.util;
 
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
 
 import lombok.Getter;
@@ -16,9 +16,9 @@ import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 public class OnlineTimeRecord 
 {
     @Getter
-    private static final Map<UUID, Long> joinTimeRecord = new HashMap();
+    private static final Map<UUID, Long> joinTimeRecord = new ConcurrentHashMap<>();
     @Getter
-    private static final Map<UUID, OnlineTimeRecord > onlineTimeRecords = new HashMap();
+    private static final Map<UUID, OnlineTimeRecord> onlineTimeRecords = new ConcurrentHashMap<>();
     
     @Getter
     private final long timeInMillis;
@@ -39,27 +39,32 @@ public class OnlineTimeRecord
     }
     
     public static long getTodayOnlineTime(UUID uuid) {
-        if (!joinTimeRecord.containsKey(uuid)) return 0;
-        SignInDate lastPlayed = SignInDate.getInstance(new Date(joinTimeRecord.get(uuid)));
+        Long joinTime = joinTimeRecord.get(uuid);
+        if (joinTime == null) return 0;
+
+        SignInDate lastPlayed = SignInDate.getInstance(new Date(joinTime));
         SignInDate now = SignInDate.getInstance(new Date());
-        if (onlineTimeRecords.containsKey(uuid) && ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getBoolean("Online-Duration-Condition.Statistics")) {
+        OnlineTimeRecord record = onlineTimeRecords.get(uuid);
+        boolean includeSavedStatistics = record != null
+                && ConfigurationUtil.getConfig(ConfigurationType.CONFIG)
+                        .getBoolean("Online-Duration-Condition.Statistics");
+        if (includeSavedStatistics) {
             if (lastPlayed.getYear() == now.getYear() && lastPlayed.getMonth() == now.getMonth() && lastPlayed.getDay() == now.getDay()) {
-                OnlineTimeRecord  record = onlineTimeRecords.get(uuid);
-                if (record.getRecordTime().getYear() == now.getYear() && record.getRecordTime().getMonth() == now.getMonth() && record.getRecordTime().getDay() == now.getDay()) {
+                if (record.getRecordTime().getYear() == now.getYear()
+                        && record.getRecordTime().getMonth() == now.getMonth()
+                        && record.getRecordTime().getDay() == now.getDay()) {
                     return record.getTimeInMillis() + now.getMillisecond() - lastPlayed.getMillisecond();
-                } else {
-                    return now.getMillisecond() - lastPlayed.getMillisecond();
                 }
-            } else {
-                lastPlayed = SignInDate.getInstance(now.getYear(), now.getMonth(), now.getDay(), 0, 0, 0);
                 return now.getMillisecond() - lastPlayed.getMillisecond();
             }
-        } else {
-            if (lastPlayed.getYear() != now.getYear() || lastPlayed.getMonth() != now.getMonth() || lastPlayed.getDay() != now.getDay()) {
-                lastPlayed = SignInDate.getInstance(now.getYear(), now.getMonth(), now.getDay(), 0, 0, 0);
-            }
+            lastPlayed = SignInDate.getInstance(now.getYear(), now.getMonth(), now.getDay(), 0, 0, 0);
             return now.getMillisecond() - lastPlayed.getMillisecond();
         }
+
+        if (lastPlayed.getYear() != now.getYear() || lastPlayed.getMonth() != now.getMonth() || lastPlayed.getDay() != now.getDay()) {
+            lastPlayed = SignInDate.getInstance(now.getYear(), now.getMonth(), now.getDay(), 0, 0, 0);
+        }
+        return now.getMillisecond() - lastPlayed.getMillisecond();
     }
     
     public static long getSignInRequirement(Player player) {

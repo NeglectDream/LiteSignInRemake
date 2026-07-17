@@ -35,7 +35,6 @@ public class GUICommand
                 MessageUtil.sendMessage(sender, ConfigurationUtil.getConfig(ConfigurationType.MESSAGES), "Unable-To-SignIn-In-Disabled-World");
                 return;
             }
-            SignInDate target = SignInDate.getInstance(new Date());
             if (args.length == 1) {
                 Menu.openGUI(player);
                 MessageUtil.sendCommandMessage(player, "GUI.Normal");
@@ -43,13 +42,6 @@ public class GUICommand
                 if (LiteSignInUtils.hasCommandPermission(sender, "Designated-GUI", true)) {
                     for (int month = 1;month <= 12;month++) {
                         if (args[1].equals(String.valueOf(month))) {
-                            target.setMonth(month);
-                            if (PluginControl.enableGUILimitDate() && target.compareTo(PluginControl.getGUILimitedDate()) < 0) {
-                                placeholders.put("{year}", String.valueOf(PluginControl.getGUILimitedDateYear()));
-                                placeholders.put("{month}", String.valueOf(PluginControl.getGUILimitedDateMonth()));
-                                MessageUtil.sendMessage(sender, ConfigurationUtil.getConfig(ConfigurationType.MESSAGES), "GUI-SignIn-Messages.Minimum-GUI-Date", placeholders);
-                                return;
-                            }
                             Menu.openGUI(player, month);
                             placeholders.put("{month}", String.valueOf(month));
                             MessageUtil.sendCommandMessage(player, "GUI.Normal", placeholders);
@@ -85,14 +77,6 @@ public class GUICommand
                     if (year < 1970 || year > SignInDate.getInstance(new Date()).getYear()) {
                         placeholders.put("{year}", args[2]);
                         MessageUtil.sendCommandMessage(player, "GUI.Invalid-Year", placeholders);
-                        return;
-                    }
-                    target.setMonth(month);
-                    target.setYear(year);
-                    if (PluginControl.enableGUILimitDate() && target.compareTo(PluginControl.getGUILimitedDate()) < 0) {
-                        placeholders.put("{year}", String.valueOf(PluginControl.getGUILimitedDateYear()));
-                        placeholders.put("{month}", String.valueOf(PluginControl.getGUILimitedDateMonth()));
-                        MessageUtil.sendMessage(sender, ConfigurationUtil.getConfig(ConfigurationType.MESSAGES), "GUI-SignIn-Messages.Minimum-GUI-Date", placeholders);
                         return;
                     }
                     Menu.openGUI(player, month, year);

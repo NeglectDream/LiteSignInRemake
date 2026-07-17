@@ -14,7 +14,6 @@ import org.bukkit.OfflinePlayer;
 import studio.trc.bukkit.litesignin.api.Storage;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
-import studio.trc.bukkit.litesignin.queue.SignInQueue;
 
 public class PlaceholderAPIImpl
     extends PlaceholderExpansion
@@ -79,8 +78,6 @@ public class PlaceholderAPIImpl
         Map<String, String> cacheMap = cacheOfPlayers.get(uuid);
         if (identifier.equalsIgnoreCase("signed-in")) {
             result = String.valueOf(data.alreadySignIn(SignInDate.getInstance(new Date())));
-        } else if (identifier.equalsIgnoreCase("queue")) {
-            result = String.valueOf(SignInQueue.getInstance().getRank(player.getUniqueId()));
         } else if (identifier.equalsIgnoreCase("cards_amount")) {
             result = String.valueOf(data.getRetroactiveCard());
         } else if (identifier.equalsIgnoreCase("group")) {

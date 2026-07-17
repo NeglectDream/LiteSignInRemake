@@ -258,6 +258,18 @@ public class SignInDate
         cal.set(year, month - 1, day, hour, minute, second);
         return new SimpleDateFormat(format).format(new Date(cal.getTimeInMillis()));
     }
+
+    /**
+     * Returns an independent date value with the same date and optional time
+     * period. GUI snapshots use this to prevent mutable calendar fields from
+     * leaking across sessions.
+     */
+    public SignInDate copy() {
+        if (timePeriodFound) {
+            return getInstance(year, month, day, hour, minute, second);
+        }
+        return getInstance(year, month, day);
+    }
     
     @Override
     public String toString() {

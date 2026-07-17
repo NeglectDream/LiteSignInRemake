@@ -1,16 +1,21 @@
 package studio.trc.bukkit.litesignin.packet;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
+
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketListenerAbstract;
+import com.github.retrooper.packetevents.event.PacketListenerCommon;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
@@ -19,109 +24,56 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSe
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems;
 
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
+import studio.trc.bukkit.litesignin.Main;
+import studio.trc.bukkit.litesignin.gui.SignInMenuService;
+import studio.trc.bukkit.litesignin.gui.SignInMenuSession;
 
 /**
- * PacketEvents overlay that fills an otherwise-empty Bukkit inventory with the
- * sign-in menu snapshot on the client side.
+ * Client-side visual overlay for the real, empty Bukkit sign-in container.
  *
- * <p>Architecture (mirrors DreamCore {@code PacketInventoryOverlay}):
- * <ol>
- *   <li>{@link SignInMenuService} creates a <b>real, empty</b> Bukkit
- *       {@link Inventory} and opens it via {@link Player#openInventory}. The
- *       server owns the container, windowId, stateId and click/drag
- *       transactions — other plugins see an empty inventory and can hook
- *       {@code InventoryClickEvent} / {@code InventoryDragEvent} normally.</li>
- *   <li>This class intercepts the server-bound {@code OPEN_WINDOW} packet to
- *       capture the windowId, then rewrites every {@code WINDOW_ITEMS} /
- *       {@code SET_SLOT} packet for that window so the client sees the sign-in
- *       snapshot instead of the empty server inventory.</li>
- *   <li>Clicks are handled by {@code SignInMenuListener} through Bukkit events;
- *       this class only owns the visual overlay and {@link #refresh} resync.</li>
- * </ol>
- *
- * <p>Session identity is by {@link Inventory} reference + holder, so a stale
- * packet from a superseded window can never corrupt a freshly opened one.
+ * <p>This component never creates window or transaction state. It only replaces
+ * item payloads inside authoritative Bukkit/NMS packets while preserving their
+ * windowId, stateId and carried item.
  */
 public final class SignInMenuOverlay
 {
-    private static final ItemStack AIR = new ItemStack(Material.AIR);
+    private static final long LOG_INTERVAL_NANOS = TimeUnit.MINUTES.toNanos(1);
+    private static final int ITEM_CACHE_LIMIT = 512;
+    private static final AtomicLong LAST_FAILURE_LOG = new AtomicLong();
+    private static final Map<ItemStack, com.github.retrooper.packetevents.protocol.item.ItemStack> ITEM_CACHE =
+            Collections.synchronizedMap(new LinkedHashMap<ItemStack, com.github.retrooper.packetevents.protocol.item.ItemStack>(128, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<ItemStack, com.github.retrooper.packetevents.protocol.item.ItemStack> eldest) {
+                    return size() > ITEM_CACHE_LIMIT;
+                }
+            });
 
-    private static final Map<UUID, Session> SESSIONS = new ConcurrentHashMap<>();
-    private static volatile boolean listenerRegistered;
+    private static PacketListenerCommon listener;
 
     private SignInMenuOverlay() {}
 
-    /**
-     * Registers the overlay for {@code player}'s soon-to-be-opened inventory.
-     *
-     * @param overlayItems display snapshot indexed by slot; {@code null}/AIR
-     *                     slots are left transparent (the server's real —
-     *                     empty — slot shows)
-     */
-    public static void open(Player player, Inventory inventory, ItemStack[] overlayItems) {
-        if (player == null || inventory == null) {
+    /** Registers the single PacketEvents listener for this plugin lifecycle. */
+    public static synchronized void initialize() {
+        if (listener != null) {
             return;
         }
-        ensureListener();
-        SESSIONS.put(player.getUniqueId(), new Session(inventory, overlayItems));
+        listener = PacketEvents.getAPI().getEventManager().registerListener(
+                new PacketListenerAbstract(PacketListenerPriority.HIGHEST) {
+                    @Override
+                    public void onPacketSend(PacketSendEvent event) {
+                        handlePacketSend(event);
+                    }
+                });
     }
 
-    /**
-     * Removes the overlay session only if it still backs {@code inventory}.
-     * Called from {@code InventoryCloseEvent}; a stale close for a previous
-     * inventory cannot clear a freshly opened session.
-     */
-    public static boolean clear(Player player, Inventory inventory) {
-        if (player == null) {
-            return false;
-        }
-        Session session = SESSIONS.get(player.getUniqueId());
-        if (session == null || session.inventory != inventory) {
-            return false;
-        }
-        return SESSIONS.remove(player.getUniqueId(), session);
-    }
-
-    /** Returns the active overlay session for the player, if any. */
-    public static Session getSession(UUID uuid) {
-        return SESSIONS.get(uuid);
-    }
-
-    /**
-     * Re-sends every overlay slot to the client via {@code SET_SLOT}.
-     *
-     * <p>Used after a cancelled click so the client never retains a stale
-     * button state. Runs on the main thread (caller's responsibility).
-     */
-    public static void refresh(Player player) {
-        if (player == null) {
+    /** Unregisters the listener so hot reload cannot retain the old classloader. */
+    public static synchronized void shutdown() {
+        if (listener == null) {
             return;
         }
-        Session session = SESSIONS.get(player.getUniqueId());
-        if (session == null || !session.hasWindowId()) {
-            return;
-        }
-        for (int slot = 0; slot < session.overlayItems.length; slot++) {
-            session.resendSlot(player, slot);
-        }
-    }
-
-    private static void ensureListener() {
-        if (listenerRegistered) {
-            return;
-        }
-        synchronized (SignInMenuOverlay.class) {
-            if (listenerRegistered) {
-                return;
-            }
-            PacketEvents.getAPI().getEventManager().registerListener(new PacketListenerAbstract(PacketListenerPriority.NORMAL) {
-                @Override
-                public void onPacketSend(PacketSendEvent event) {
-                    handlePacketSend(event);
-                }
-            });
-            listenerRegistered = true;
-        }
+        PacketEvents.getAPI().getEventManager().unregisterListener(listener);
+        listener = null;
+        ITEM_CACHE.clear();
     }
 
     private static void handlePacketSend(PacketSendEvent event) {
@@ -129,119 +81,95 @@ public final class SignInMenuOverlay
         if (player == null) {
             return;
         }
-        Session session = SESSIONS.get(player.getUniqueId());
-        if (session == null) {
+        SignInMenuSession session = SignInMenuService.getSession(player.getUniqueId());
+        if (session == null || !SignInMenuService.isCurrent(player, session)) {
             return;
         }
         try {
             if (event.getPacketType() == PacketType.Play.Server.OPEN_WINDOW) {
-                session.windowId = new WrapperPlayServerOpenWindow(event).getContainerId();
-                return;
-            }
-            if (event.getPacketType() == PacketType.Play.Server.WINDOW_ITEMS) {
+                bindOpenWindow(event, player, session);
+            } else if (event.getPacketType() == PacketType.Play.Server.WINDOW_ITEMS) {
                 overlayWindowItems(event, session);
-                return;
-            }
-            if (event.getPacketType() == PacketType.Play.Server.SET_SLOT) {
+            } else if (event.getPacketType() == PacketType.Play.Server.SET_SLOT) {
                 overlaySetSlot(event, session);
             }
-        } catch (RuntimeException ignored) {
-            // Packet shape mismatch: safest is to leave the packet untouched.
+        } catch (RuntimeException error) {
+            logPacketFailure(player, event, session, error);
         }
     }
 
-    private static void overlayWindowItems(PacketSendEvent event, Session session) {
-        if (!session.hasWindowId()) {
+    private static void bindOpenWindow(PacketSendEvent event, Player player, SignInMenuSession session) {
+        if (session.getState() != SignInMenuSession.State.OPENING) {
             return;
         }
+        // PacketEvents can fire this send hook off the main thread; only consult
+        // Bukkit inventory state when we know we are on the main thread. The
+        // authoritative one-shot expectation was armed by InventoryOpenEvent.
+        if (Bukkit.isPrimaryThread()
+                && player.getOpenInventory().getTopInventory() != session.getInventory()) {
+            session.invalidateOpenExpectation();
+            return;
+        }
+        int windowId = new WrapperPlayServerOpenWindow(event).getContainerId();
+        session.bindWindowId(windowId);
+    }
+
+    private static void overlayWindowItems(PacketSendEvent event, SignInMenuSession session) {
         WrapperPlayServerWindowItems wrapper = new WrapperPlayServerWindowItems(event);
-        if (wrapper.getWindowId() != session.windowId) {
+        if (!session.acceptsWindow(wrapper.getWindowId())) {
             return;
         }
         ArrayList<com.github.retrooper.packetevents.protocol.item.ItemStack> items =
                 new ArrayList<>(wrapper.getItems());
-        int limit = Math.min(session.overlayItems.length, items.size());
-        for (int slot = 0; slot < limit; slot++) {
-            ItemStack overlay = session.overlayItems[slot];
-            if (overlay != null && overlay.getType() != Material.AIR) {
-                items.set(slot, toPacketItem(overlay));
-            }
+        if (items.size() < SignInMenuSession.MENU_SIZE) {
+            throw new IllegalStateException("Window item list is smaller than the 54-slot sign-in container");
+        }
+        for (int slot = 0; slot < SignInMenuSession.MENU_SIZE; slot++) {
+            items.set(slot, toPacketItem(session.getOverlayItem(slot)));
         }
         wrapper.setItems(items);
         event.markForReEncode(true);
     }
 
-    private static void overlaySetSlot(PacketSendEvent event, Session session) {
-        if (!session.hasWindowId()) {
-            return;
-        }
+    private static void overlaySetSlot(PacketSendEvent event, SignInMenuSession session) {
         WrapperPlayServerSetSlot wrapper = new WrapperPlayServerSetSlot(event);
         int slot = wrapper.getSlot();
-        if (wrapper.getWindowId() != session.windowId || slot < 0 || slot >= session.overlayItems.length) {
+        if (!session.acceptsWindow(wrapper.getWindowId())
+                || slot < 0 || slot >= SignInMenuSession.MENU_SIZE) {
             return;
         }
-        ItemStack overlay = session.overlayItems[slot];
-        if (overlay == null || overlay.getType() == Material.AIR) {
-            return;
-        }
-        wrapper.setItem(toPacketItem(overlay));
+        wrapper.setItem(toPacketItem(session.getOverlayItem(slot)));
         event.markForReEncode(true);
     }
 
     private static com.github.retrooper.packetevents.protocol.item.ItemStack toPacketItem(ItemStack item) {
         if (item == null || item.getType() == Material.AIR) {
-            return SpigotConversionUtil.fromBukkitItemStack(AIR);
+            return com.github.retrooper.packetevents.protocol.item.ItemStack.EMPTY;
         }
-        return SpigotConversionUtil.fromBukkitItemStack(item);
+        synchronized (ITEM_CACHE) {
+            com.github.retrooper.packetevents.protocol.item.ItemStack cached = ITEM_CACHE.get(item);
+            if (cached != null) {
+                return cached;
+            }
+            com.github.retrooper.packetevents.protocol.item.ItemStack converted =
+                    SpigotConversionUtil.fromBukkitItemStack(item);
+            ITEM_CACHE.put(item.clone(), converted);
+            return converted;
+        }
     }
 
-    /**
-     * Overlay state for one player's open sign-in menu.
-     *
-     * <p>{@code windowId} is captured from the first {@code OPEN_WINDOW} packet
-     * sent after {@link #open}. Before that it is {@code -1} and overlay
-     * rewriting is skipped.
-     */
-    public static final class Session
-    {
-        private final Inventory inventory;
-        private final ItemStack[] overlayItems;
-        private volatile int windowId = -1;
-        private int stateId;
-
-        private Session(Inventory inventory, ItemStack[] overlays) {
-            this.inventory = inventory;
-            this.overlayItems = new ItemStack[inventory.getSize()];
-            if (overlays != null) {
-                int limit = Math.min(overlays.length, overlayItems.length);
-                for (int slot = 0; slot < limit; slot++) {
-                    ItemStack item = overlays[slot];
-                    if (item != null && item.getType() != Material.AIR) {
-                        overlayItems[slot] = item.clone();
-                    }
-                }
-            }
+    private static void logPacketFailure(Player player, PacketSendEvent event,
+                                         SignInMenuSession session, RuntimeException error) {
+        long now = System.nanoTime();
+        long previous = LAST_FAILURE_LOG.get();
+        if (now - previous < LOG_INTERVAL_NANOS || !LAST_FAILURE_LOG.compareAndSet(previous, now)) {
+            return;
         }
-
-        public Inventory getInventory() {
-            return inventory;
-        }
-
-        boolean hasWindowId() {
-            return windowId >= 0;
-        }
-
-        private void resendSlot(Player player, int slot) {
-            if (player == null || !player.isOnline() || !hasWindowId()
-                    || slot < 0 || slot >= overlayItems.length) {
-                return;
-            }
-            ItemStack overlay = overlayItems[slot];
-            if (overlay == null || overlay.getType() == Material.AIR) {
-                return;
-            }
-            PacketEvents.getAPI().getPlayerManager().sendPacket(player, new WrapperPlayServerSetSlot(
-                    windowId, ++stateId, slot, toPacketItem(overlay)));
-        }
+        Main.getInstance().getLogger().log(Level.WARNING,
+                "Failed to rewrite sign-in packet " + event.getPacketType()
+                        + " for " + player.getUniqueId()
+                        + " (window=" + session.getWindowId()
+                        + ", state=" + session.getState() + ")",
+                error);
     }
 }

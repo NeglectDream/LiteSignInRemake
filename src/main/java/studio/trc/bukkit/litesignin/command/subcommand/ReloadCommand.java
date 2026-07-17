@@ -15,8 +15,11 @@ public class ReloadCommand
 {
     @Override
     public void execute(CommandSender sender, String subCommand, String... args) {
-        PluginControl.reload();
-        MessageUtil.sendCommandMessage(sender, "Reload");
+        if (PluginControl.reload()) {
+            MessageUtil.sendCommandMessage(sender, "Reload");
+        } else {
+            MessageUtil.sendCommandMessage(sender, "Reload-Failed");
+        }
     }
 
     @Override

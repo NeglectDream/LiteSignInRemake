@@ -1,89 +1,152 @@
 package studio.trc.bukkit.litesignin.thread;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+import java.util.logging.Level;
 
-import lombok.Getter;
-import lombok.Setter;
-
+import studio.trc.bukkit.litesignin.Main;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
-import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
 
-public class LiteSignInThread
-    extends Thread
-{
-    @Getter
-    private static LiteSignInThread taskThread = null;
-    
-    @Getter
-    @Setter
-    private boolean running = false;
-    @Getter
-    private final List<LiteSignInTask> tasks = new CopyOnWriteArrayList<>();
-    
-    @Getter
-    private final double delay;
-    
-    public LiteSignInThread(String name, double delay) {
-        super(name);
-        this.delay = delay;
-    }
+/**
+ * Single-thread asynchronous IO executor used by LiteSignIn.
+ *
+ * <p>The historical class name is retained for source compatibility, but the
+ * polling thread and mutable task list have been replaced by a scheduled
+ * executor with explicit startup and shutdown semantics.</p>
+ */
+public final class LiteSignInThread {
+    private static final Object LIFECYCLE_LOCK = new Object();
+    private static final AtomicInteger THREAD_NUMBER = new AtomicInteger();
 
-    @Override
-    public void run() {
-        running = true;
-        List<LiteSignInTask> waitToExecute = new ArrayList<>();
-        List<LiteSignInTask> waitToRemove = new ArrayList<>();
-        while (running) {
-            try {
-                long usedTime = System.currentTimeMillis();
-                if (!tasks.isEmpty()) {
-                    waitToExecute.addAll(tasks);
-                    waitToExecute.stream().filter(task -> {
-                        if (task.getTotalExecuteTimes() != -1 && task.getExecuteTimes() >= task.getTotalExecuteTimes()) {
-                            waitToRemove.add(task);
-                            return false;
-                        }
-                        return true;
-                    }).forEach(task -> {
-                        try {
-                            task.run();
-                        } catch (Throwable t) {
-                            t.printStackTrace();
-                            waitToRemove.add(task);
-                        }
-                    });
-                    if (!waitToRemove.isEmpty()) {
-                        waitToRemove.stream().forEach(tasks::remove);
-                        waitToRemove.clear();
-                    }
-                    if (!waitToExecute.isEmpty()) waitToExecute.clear();
-                }
-                long speed = ((long) (delay * 1000)) - (System.currentTimeMillis() - usedTime);
-                if (speed >= 0) sleep(speed);
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
-        }
-    }
-    
+    private static volatile ScheduledThreadPoolExecutor executor;
+
+    private LiteSignInThread() {}
+
     public static void initialize() {
-        if (taskThread != null && taskThread.running) {
-            taskThread.running = false;
+        shutdownAndAwait(10, TimeUnit.SECONDS);
+        synchronized (LIFECYCLE_LOCK) {
+            ScheduledThreadPoolExecutor created = new ScheduledThreadPoolExecutor(1, new TaskThreadFactory());
+            created.setRemoveOnCancelPolicy(true);
+            created.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+            created.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+            executor = created;
         }
-        taskThread = new LiteSignInThread("LiteSignIn-TaskThread", ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getDouble("Async-Thread-Settings.Task-Thread-Delay"));
+        MessageUtil.sendConsoleMessage("Console-Messages.Async-Thread-Started", ConfigurationType.MESSAGES,
+                MessageUtil.getDefaultPlaceholders());
+    }
 
-        MessageUtil.sendConsoleMessage("Console-Messages.Async-Thread-Started", ConfigurationType.MESSAGES, MessageUtil.getDefaultPlaceholders());
-        taskThread.start();
+    public static boolean isRunning() {
+        ScheduledThreadPoolExecutor current = executor;
+        return current != null && !current.isShutdown();
     }
-    
+
     public static void runTask(Runnable task) {
-        taskThread.tasks.add(new LiteSignInTask(task, 1, 0));
+        tryRunTask(task);
     }
-    
-    public static void runTask(Runnable task, double second) {
-        taskThread.tasks.add(new LiteSignInTask(task, 1, (long) (1D / ConfigurationUtil.getConfig(ConfigurationType.CONFIG).getDouble("Async-Thread-Settings.Task-Thread-Delay") * second)));
+
+    public static boolean tryRunTask(Runnable task) {
+        return submit(task, 0L, TimeUnit.MILLISECONDS);
+    }
+
+    public static void runTask(Runnable task, double seconds) {
+        long delayMillis = Math.max(0L, Math.round(seconds * 1000D));
+        submit(task, delayMillis, TimeUnit.MILLISECONDS);
+    }
+
+    public static <T> CompletableFuture<T> supplyTask(Supplier<T> supplier) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        if (!submit(() -> {
+            try {
+                future.complete(supplier.get());
+            } catch (Throwable error) {
+                future.completeExceptionally(error);
+                logTaskFailure(error);
+            }
+        }, 0L, TimeUnit.MILLISECONDS)) {
+            future.completeExceptionally(new RejectedExecutionException("LiteSignIn executor is not running"));
+        }
+        return future;
+    }
+
+    /**
+     * Stops accepting new tasks and waits for already-running work. Delayed
+     * tasks that have not started are cancelled by executor policy.
+     */
+    public static boolean shutdownAndAwait(long timeout, TimeUnit unit) {
+        ScheduledThreadPoolExecutor current;
+        synchronized (LIFECYCLE_LOCK) {
+            current = executor;
+            executor = null;
+        }
+        if (current == null) {
+            return true;
+        }
+
+        current.shutdown();
+        boolean terminated = awaitTermination(current, timeout, unit);
+        if (!terminated) {
+            List<Runnable> cancelled = current.shutdownNow();
+            if (!cancelled.isEmpty() && Main.getInstance() != null) {
+                Main.getInstance().getLogger().warning("Cancelled " + cancelled.size()
+                        + " pending LiteSignIn asynchronous task(s) during shutdown.");
+            }
+            terminated = awaitTermination(current, Math.min(unit.toMillis(timeout), 2000L), TimeUnit.MILLISECONDS);
+        }
+        return terminated;
+    }
+
+    private static boolean submit(Runnable task, long delay, TimeUnit unit) {
+        if (task == null) {
+            return false;
+        }
+        ScheduledThreadPoolExecutor current = executor;
+        if (current == null || current.isShutdown()) {
+            return false;
+        }
+        try {
+            current.schedule(() -> {
+                try {
+                    task.run();
+                } catch (Throwable error) {
+                    logTaskFailure(error);
+                }
+            }, delay, unit);
+            return true;
+        } catch (RejectedExecutionException ex) {
+            return false;
+        }
+    }
+
+    private static boolean awaitTermination(ScheduledThreadPoolExecutor current, long timeout, TimeUnit unit) {
+        try {
+            return current.awaitTermination(Math.max(0L, timeout), unit);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    private static void logTaskFailure(Throwable error) {
+        Main plugin = Main.getInstance();
+        if (plugin != null) {
+            plugin.getLogger().log(Level.SEVERE, "LiteSignIn asynchronous task failed", error);
+        }
+    }
+
+    private static final class TaskThreadFactory implements ThreadFactory {
+        @Override
+        public Thread newThread(Runnable task) {
+            Thread thread = new Thread(task, "LiteSignIn-Async-" + THREAD_NUMBER.incrementAndGet());
+            thread.setDaemon(true);
+            thread.setUncaughtExceptionHandler((ignored, error) -> logTaskFailure(error));
+            return thread;
+        }
     }
 }

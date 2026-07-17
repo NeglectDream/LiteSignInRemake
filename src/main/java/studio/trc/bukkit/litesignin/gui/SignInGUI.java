@@ -23,7 +23,6 @@ import studio.trc.bukkit.litesignin.api.Storage;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationUtil;
 import studio.trc.bukkit.litesignin.configuration.ConfigurationType;
 import studio.trc.bukkit.litesignin.message.MessageUtil;
-import studio.trc.bukkit.litesignin.queue.SignInQueue;
 import studio.trc.bukkit.litesignin.gui.SignInGUIColumn.KeyType;
 import studio.trc.bukkit.litesignin.util.SignInDate;
 import studio.trc.bukkit.litesignin.util.PluginControl;
@@ -164,7 +163,6 @@ public class SignInGUI
         SignInDate today = SignInDate.getInstance(new Date());
         if (today.getMonth() == month && today.getYear() == year) return getKey(player);
         Storage playerdata = Storage.getPlayer(player);
-        String queue = String.valueOf(SignInQueue.getInstance().getRank(playerdata.getUserUUID()));
         String continuous = String.valueOf(playerdata.getContinuousSignIn());
         String totalNumber = String.valueOf(playerdata.getCumulativeNumber());
         String cards = String.valueOf(playerdata.getRetroactiveCard());
@@ -183,7 +181,7 @@ public class SignInGUI
             List<KeyType> keys = new ArrayList<>();
             for (int i = 0;i < days[month - 1];i++) {
                 SignInDate historicalDate = SignInDate.getInstance(year, month, i + 1);
-                Map<String, String> placeholders = getPlaceholdersOfKeyButton(i, continuous, queue, totalNumber, cards, nextPageMonth, nextPageYear, previousPageMonth, previousPageYear, historicalDate);
+                Map<String, String> placeholders = getPlaceholdersOfKeyButton(i, continuous, totalNumber, cards, nextPageMonth, nextPageYear, previousPageMonth, previousPageYear, historicalDate);
                 ItemStack key;
                 KeyType keyType;
                 if (playerdata.alreadySignIn(historicalDate)) {
@@ -213,7 +211,7 @@ public class SignInGUI
             List<KeyType> keys = new ArrayList<>();
             for (int i = 0;i < days[month - 1];i++) {
                 SignInDate historicalDate = SignInDate.getInstance(year, month, i + 1);
-                Map<String, String> placeholders = getPlaceholdersOfKeyButton(i, continuous, queue, totalNumber, cards, nextPageMonth, nextPageYear, previousPageMonth, previousPageYear, historicalDate);
+                Map<String, String> placeholders = getPlaceholdersOfKeyButton(i, continuous, totalNumber, cards, nextPageMonth, nextPageYear, previousPageMonth, previousPageYear, historicalDate);
                 items.add(getButtonItem(player, placeholders, section, "Comming-Soon", i + 1));
                 keys.add(KeyType.COMMING_SOON);
             }
@@ -252,7 +250,6 @@ public class SignInGUI
     public static Set<SignInGUIColumn> getKey(Player player) {
         Set<SignInGUIColumn> set = new LinkedHashSet();
         Storage playerdata = Storage.getPlayer(player);
-        String queue = String.valueOf(SignInQueue.getInstance().getRank(playerdata.getUserUUID()));
         String continuous = String.valueOf(playerdata.getContinuousSignIn());
         String totalNumber = String.valueOf(playerdata.getCumulativeNumber());
         String cards = String.valueOf(playerdata.getRetroactiveCard());
@@ -273,7 +270,7 @@ public class SignInGUI
         List<KeyType> keys = new ArrayList<>();
         for (int i = 0;i < days[month - 1];i++) {
             SignInDate date = SignInDate.getInstance(year, month, i + 1);
-            Map<String, String> placeholders = getPlaceholdersOfKeyButton(i, continuous, queue, totalNumber, cards, nextPageMonth, nextPageYear, previousPageMonth, previousPageYear, date);
+            Map<String, String> placeholders = getPlaceholdersOfKeyButton(i, continuous, totalNumber, cards, nextPageMonth, nextPageYear, previousPageMonth, previousPageYear, date);
             if (i + 1 < day) {
                 ItemStack key;
                 KeyType keyType;
@@ -335,7 +332,6 @@ public class SignInGUI
     public static Set<SignInGUIColumn> getOthers(Player player, int month, int year) {
         Set<SignInGUIColumn> set = new HashSet();
         Storage playerdata = Storage.getPlayer(player);
-        String queue = String.valueOf(SignInQueue.getInstance().getRank(playerdata.getUserUUID()));
         String continuous = String.valueOf(playerdata.getContinuousSignIn());
         String totalNumber = String.valueOf(playerdata.getCumulativeNumber());
         String cards = String.valueOf(playerdata.getRetroactiveCard());
@@ -348,7 +344,6 @@ public class SignInGUI
             section.getKeys(false).stream().forEach(items -> {
                 Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
                 placeholders.put("{continuous}", continuous);
-                placeholders.put("{queue}", queue);
                 placeholders.put("{total-number}", totalNumber);
                 placeholders.put("{cards}", cards);
                 placeholders.put("{month}", String.valueOf(month));
@@ -402,7 +397,6 @@ public class SignInGUI
     private static Map<String, String> getPlaceholdersOfKeyButton(
             int day,
             String continuous,
-            String queue,
             String totalNumber,
             String cards,
             int nextPageMonth,
@@ -414,7 +408,6 @@ public class SignInGUI
         if (historicalDate != null) placeholders.put("{date}", historicalDate.getName(ConfigurationUtil.getConfig(ConfigurationType.GUI_SETTINGS).getString("SignIn-GUI-Settings.Date-Format")));
         placeholders.put("{day}", String.valueOf(day + 1));
         placeholders.put("{continuous}", continuous);
-        placeholders.put("{queue}", queue);
         placeholders.put("{total-number}", totalNumber);
         placeholders.put("{cards}", cards);
         placeholders.put("{nextPageMonth}", String.valueOf(nextPageMonth));

@@ -1,13 +1,10 @@
 package studio.trc.bukkit.litesignin.api;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
 
 import studio.trc.bukkit.litesignin.database.storage.SQLiteStorage;
 import studio.trc.bukkit.litesignin.database.engine.SQLiteEngine;
-import studio.trc.bukkit.litesignin.database.engine.SQLQuery;
 import studio.trc.bukkit.litesignin.database.DatabaseTable;
 import studio.trc.bukkit.litesignin.util.SignInDate;
 import studio.trc.bukkit.litesignin.reward.util.SignInGroup;
@@ -128,6 +125,33 @@ public interface Storage
      * @param historicalDate 
      */
     public void signIn(SignInDate historicalDate);
+
+    /**
+     * Attempts a normal sign-in and reports the exact outcome.
+     *
+     * <p>The default implementation preserves compatibility for third-party
+     * Storage implementations. Built-in storage overrides this method with an
+     * atomic database-backed implementation.</p>
+     */
+    default SignInResult trySignIn() {
+        if (alreadySignIn()) {
+            return SignInResult.ALREADY_SIGNED_IN;
+        }
+        signIn();
+        return alreadySignIn() ? SignInResult.SUCCESS : SignInResult.STORAGE_FAILURE;
+    }
+
+    /** Attempts an administrator/API historical sign-in without consuming a card. */
+    default SignInResult trySignIn(SignInDate historicalDate) {
+        if (historicalDate == null) {
+            return SignInResult.INVALID_DATE;
+        }
+        if (alreadySignIn(historicalDate)) {
+            return SignInResult.ALREADY_SIGNED_IN;
+        }
+        signIn(historicalDate);
+        return alreadySignIn(historicalDate) ? SignInResult.SUCCESS : SignInResult.STORAGE_FAILURE;
+    }
     
     /**
      * Give player a specified number of cards.
@@ -172,26 +196,27 @@ public interface Storage
         return SQLiteStorage.getPlayerData(player);
     }
 
-    public static Storage getPlayer(String playername) {
+    public static Storage getPlayer(String playerName) {
         for (SQLiteStorage data : SQLiteStorage.cache.values()) {
-            String name = data.getName();
-            if (name != null && name.equalsIgnoreCase(playername)) {
+            String cachedName = data.getName();
+            if (cachedName != null && cachedName.equalsIgnoreCase(playerName)) {
                 return data;
             }
         }
-        UUID uuid = null;
-        try (SQLQuery query = SQLiteEngine.getInstance().executeQuery("SELECT UUID FROM " + SQLiteEngine.getInstance().getTableSyntax(DatabaseTable.PLAYER_DATA) + " WHERE Name = ?", playername)) {
-            ResultSet rs = query.getResult();
-            if (rs.next()) {
-                uuid = UUID.fromString(rs.getString("UUID"));
-            }
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-        }
+        SQLiteEngine sqlite = SQLiteEngine.getInstance();
+        UUID uuid = sqlite.query("SELECT UUID FROM "
+                        + sqlite.getTableSyntax(DatabaseTable.PLAYER_DATA) + " WHERE Name = ?",
+                result -> result.next() ? UUID.fromString(result.getString("UUID")) : null,
+                playerName);
         return uuid != null ? SQLiteStorage.getPlayerData(uuid) : null;
     }
 
     public static Storage getPlayer(UUID uuid) {
         return SQLiteStorage.getPlayerData(uuid);
+    }
+
+    /** Loads a player without calling Bukkit APIs from the database thread. */
+    public static Storage getPlayer(UUID uuid, String knownName) {
+        return SQLiteStorage.getPlayerData(uuid, knownName);
     }
 }

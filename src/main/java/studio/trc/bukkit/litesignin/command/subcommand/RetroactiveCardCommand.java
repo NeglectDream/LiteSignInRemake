@@ -30,29 +30,38 @@ public class RetroactiveCardCommand
         }
         if (args.length < 3) {
             MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Help");
+            return;
+        }
+        String subCommandType = args[1];
+        if (subCommandType.equalsIgnoreCase("help")) {
+            MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Help");
+            return;
+        }
+        // Physical-card mode derives card counts from the player's inventory and
+        // matches items by display name, so give/set/take cannot mutate the pool;
+        // these subcommands are only available in virtual-counter mode.
+        if (PluginControl.enableRetroactiveCardRequiredItem()) {
+            MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Physical-Mode-Unsupported");
+            return;
+        }
+        Player player;
+        if (args.length == 3) {
+            if (LiteSignInUtils.isPlayer(sender, true)) {
+                player = (Player) sender;
+            } else {
+                return;
+            }
         } else {
-            Player player;
-            if (args.length == 3) {
-                if (LiteSignInUtils.isPlayer(sender, true)) {
-                    player = (Player) sender;
-                } else {
-                    return;
-                }
-            } else {
-                player = Bukkit.getPlayer(args[3]);
-            }
-            String subCommandType = args[1];
-            if (subCommandType.equalsIgnoreCase("help")) {
-                MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Help");
-            } else if (subCommandType.equalsIgnoreCase("give")) {
-                command_give(sender, args, player);
-            } else if (subCommandType.equalsIgnoreCase("set")) {
-                command_set(sender, args, player);
-            } else if (subCommandType.equalsIgnoreCase("take")) {
-                command_take(sender, args, player);
-            } else {
-                MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Help");
-            }
+            player = Bukkit.getPlayer(args[3]);
+        }
+        if (subCommandType.equalsIgnoreCase("give")) {
+            command_give(sender, args, player);
+        } else if (subCommandType.equalsIgnoreCase("set")) {
+            command_set(sender, args, player);
+        } else if (subCommandType.equalsIgnoreCase("take")) {
+            command_take(sender, args, player);
+        } else {
+            MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Help");
         }
     }
 
@@ -63,17 +72,17 @@ public class RetroactiveCardCommand
 
     @Override
     public List<String> tabComplete(CommandSender sender, String subCommand, String... args) {
-        String subCommandType = args[1];
+        String subCommandType = args.length > 1 ? args[1] : "";
         if (args.length <= 2) {
             List<String> commands = Arrays.stream(SubCommandType.values())
                     .filter(type -> LiteSignInUtils.hasCommandPermission(sender, type.getCommandPermissionPath(), false))
-                    .map(type -> type.getCommandName())
+                    .map(SubCommandType::getCommandName)
+                    .filter(command -> command.toLowerCase().startsWith(subCommandType.toLowerCase()))
+                    // Physical-card mode only exposes help; give/set/take are disabled.
+                    .filter(command -> !PluginControl.enableRetroactiveCardRequiredItem()
+                            || command.equalsIgnoreCase("help"))
                     .collect(Collectors.toList());
-            List<String> names = new ArrayList<>();
-            commands.stream().filter(command -> command.toLowerCase().startsWith(subCommandType.toLowerCase())).forEach(command -> {
-                names.add(command);
-            });
-            return names;
+            return commands;
         } else {
             if (args.length == 4) {
                 return tabGetPlayersName(args, 4);
@@ -94,35 +103,16 @@ public class RetroactiveCardCommand
         Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
         try {
             int number = Integer.valueOf(args[2]);
-            if (player != null) {
-                Storage data = Storage.getPlayer(player);
-                data.giveRetroactiveCard(number);
-                placeholders.put("{player}", player.getName());
-                placeholders.put("{amount}", String.valueOf(number));
-                MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Give", placeholders);
-            } else {
-                if (PluginControl.enableRetroactiveCardRequiredItem()) {
-                    placeholders.put("{player}", args[3]);
-                    MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Player-Offline", placeholders);
-                } else {
-                    if (args[3].isEmpty()) {
-                        placeholders.put("{player}", args[3]);
-                        MessageUtil.sendCommandMessage(sender, "Click.Player-Not-Exist", placeholders);
-                        return;
-                    }
-                    OfflinePlayer offlineplayer = Bukkit.getOfflinePlayer(args[3]);
-                    if (offlineplayer != null) {
-                        Storage data = Storage.getPlayer(offlineplayer.getUniqueId());
-                        data.setRetroactiveCard(data.getRetroactiveCard() + number, true);
-                        placeholders.put("{player}", offlineplayer.getName());
-                        placeholders.put("{amount}", String.valueOf(number));
-                        MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Give", placeholders);
-                    } else {
-                        placeholders.put("{player}", args[3]);
-                        MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Player-Not-Exist", placeholders);
-                    }
-                }
+            Storage data = player != null
+                    ? Storage.getPlayer(player)
+                    : offlineStorage(args, placeholders, sender);
+            if (data == null) {
+                return;
             }
+            data.giveRetroactiveCard(number);
+            placeholders.put("{player}", player != null ? player.getName() : args[3]);
+            placeholders.put("{amount}", String.valueOf(number));
+            MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Give", placeholders);
         } catch (NumberFormatException ex) {
             placeholders.put("{number}", args[2]);
             MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Invalid-Number", placeholders);
@@ -136,35 +126,16 @@ public class RetroactiveCardCommand
         Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
         try {
             int number = Integer.valueOf(args[2]);
-            if (player != null) {
-                Storage data = Storage.getPlayer(player);
-                data.setRetroactiveCard(number, true);
-                placeholders.put("{player}", player.getName());
-                placeholders.put("{amount}", String.valueOf(number));
-                MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Set", placeholders);
-            } else {
-                if (PluginControl.enableRetroactiveCardRequiredItem()) {
-                    placeholders.put("{player}", args[3]);
-                    MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Player-Offline", placeholders);
-                } else {
-                    if (args[3].isEmpty()) {
-                        placeholders.put("{player}", args[3]);
-                        MessageUtil.sendCommandMessage(sender, "Click.Player-Not-Exist", placeholders);
-                        return;
-                    }
-                    OfflinePlayer offlineplayer = Bukkit.getOfflinePlayer(args[3]);
-                    if (offlineplayer != null) {
-                        Storage data = Storage.getPlayer(offlineplayer.getUniqueId());
-                        data.setRetroactiveCard(number, true);
-                        placeholders.put("{player}", offlineplayer.getName());
-                        placeholders.put("{amount}", String.valueOf(number));
-                        MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Set", placeholders);
-                    } else {
-                        placeholders.put("{player}", args[3]);
-                        MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Player-Not-Exist", placeholders);
-                    }
-                }
+            Storage data = player != null
+                    ? Storage.getPlayer(player)
+                    : offlineStorage(args, placeholders, sender);
+            if (data == null) {
+                return;
             }
+            data.setRetroactiveCard(number, true);
+            placeholders.put("{player}", player != null ? player.getName() : args[3]);
+            placeholders.put("{amount}", String.valueOf(number));
+            MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Set", placeholders);
         } catch (NumberFormatException ex) {
             placeholders.put("{number}", args[2]);
             MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Invalid-Number", placeholders);
@@ -178,39 +149,41 @@ public class RetroactiveCardCommand
         Map<String, String> placeholders = MessageUtil.getDefaultPlaceholders();
         try {
             int number = Integer.valueOf(args[2]);
-            if (player != null) {
-                Storage data = Storage.getPlayer(player);
-                data.takeRetroactiveCard(number);
-                placeholders.put("{player}", player.getName());
-                placeholders.put("{amount}", String.valueOf(number));
-                MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Take", placeholders);
-            } else {
-                if (PluginControl.enableRetroactiveCardRequiredItem()) {
-                    placeholders.put("{player}", args[3]);
-                    MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Player-Offline", placeholders);
-                } else {
-                    if (args[3].isEmpty()) {
-                        placeholders.put("{player}", args[3]);
-                        MessageUtil.sendCommandMessage(sender, "Click.Player-Not-Exist", placeholders);
-                        return;
-                    }
-                    OfflinePlayer offlineplayer = Bukkit.getOfflinePlayer(args[3]);
-                    if (offlineplayer != null) {
-                        Storage data = Storage.getPlayer(offlineplayer.getUniqueId());
-                        data.setRetroactiveCard(data.getRetroactiveCard() - number, true);
-                        placeholders.put("{player}", offlineplayer.getName());
-                        placeholders.put("{amount}", String.valueOf(number));
-                        MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Take", placeholders);
-                    } else {
-                        placeholders.put("{player}", args[3]);
-                        MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Player-Not-Exist", placeholders);
-                    }
-                }
+            Storage data = player != null
+                    ? Storage.getPlayer(player)
+                    : offlineStorage(args, placeholders, sender);
+            if (data == null) {
+                return;
             }
+            data.takeRetroactiveCard(number);
+            placeholders.put("{player}", player != null ? player.getName() : args[3]);
+            placeholders.put("{amount}", String.valueOf(number));
+            MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Take", placeholders);
         } catch (NumberFormatException ex) {
             placeholders.put("{number}", args[2]);
             MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Invalid-Number", placeholders);
         }
+    }
+
+    /**
+     * Resolves storage for an offline target named by {@code args[3]}.
+     *
+     * <p>Only invoked in virtual-counter mode, where the physical-card restriction
+     * has already been enforced by {@link #execute}.
+     */
+    private Storage offlineStorage(String[] args, Map<String, String> placeholders, CommandSender sender) {
+        if (args[3].isEmpty()) {
+            placeholders.put("{player}", args[3]);
+            MessageUtil.sendCommandMessage(sender, "Click.Player-Not-Exist", placeholders);
+            return null;
+        }
+        OfflinePlayer offlineplayer = Bukkit.getOfflinePlayer(args[3]);
+        if (offlineplayer == null) {
+            placeholders.put("{player}", args[3]);
+            MessageUtil.sendCommandMessage(sender, "RetroactiveCard.Player-Not-Exist", placeholders);
+            return null;
+        }
+        return Storage.getPlayer(offlineplayer.getUniqueId());
     }
     
     public enum SubCommandType {

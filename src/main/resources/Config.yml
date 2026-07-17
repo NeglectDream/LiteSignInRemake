@@ -10,7 +10,6 @@ PlaceholderAPI:
     #此选项用于防止频繁调用PAPI占位符对数据库IO造成的巨大负担
     Cache-Update-Delay: 10
     #例外的占位符（不进行缓存的）
-    #示例: 'queue' 即 %litesignin_queue% 
     Exceptions: [] 
 
 #今日在线时长条件（在线达到一定时间后才可签到）
@@ -29,10 +28,6 @@ Online-Duration-Condition:
 #当玩家处于列表中的世界时无法进行签到
 Disabled-Worlds: []
 
-#是否启用签到排名榜功能
-#此功能用于登记每日签到玩家的先后顺序
-Enable-Sign-In-Ranking: true
-
 #是否启用多组奖励模式
 #当玩家同时拥有多个奖励组的权限时，将在签到时同时获得它们的奖励
 #例如玩家同时拥有Group1和Group2的组权限，签到后将同时获得这两个组的奖励
@@ -46,35 +41,18 @@ Join-Event:
     #延迟（单位：秒）
     Delay: 0
 
-#签到菜单相关设置
-GUI-Settings:
-    #是否启用箱子GUI作为签到菜单
-    #启用后可使用/signin gui打开菜单
-    Enabled: true
-    #下限日期，用于限制能打开的签到菜单的最低日期
-    #PS: 2019年11月15日是本插件初代版本完工之日
-    Limit-Date:
-        #是否启用
-        Enabled: false
-        #最低年份
-        Minimum-Year: 2019
-        #最低月份
-        Minimum-Month: 11
+#是否启用箱子GUI作为签到菜单
+#启用后可使用/signin gui打开菜单
+GUI-Settings: true
 
-#异步线程的设置
-#若不清楚这什么是异步线程，请不要修改这个选项！
-Async-Thread-Settings: 
-    #任务执行器的执行延迟（单位是秒，可以有小数）
-    #主要处理提交的新任务（主要是命令、事件、数据库IO操作等任务）
+#异步 IO 执行器设置
+#Task-Thread-Delay 与 Async-Task-Settings 为旧版本兼容键。
+#当前版本始终使用单线程 ScheduledExecutorService 执行数据库/网络 IO，
+#并确保所有 Bukkit API、权限、消息和事件回到服务器主线程。
+Async-Thread-Settings:
     Task-Thread-Delay: 0.1
-    #异步任务设置
-    #你可以选择将某些任务归类为异步任务
     Async-Task-Settings:
-        #排行榜查看
-        Leaderboard-View: true
-        #加载玩家数据
         Load-Data: true
-        #打开GUI
         Open-GUI: false
     
 #补签卡
@@ -93,9 +71,11 @@ Retroactive-Card:
         #如果为false， 则补签卡将不是一个可以被放置于物品栏中的物品，而会是虚拟道具
         #你可以使用/signin info [玩家] 查看一名玩家拥有的补签卡数量
         Enabled: false
-        #自定义物品的名字
-        #你可以在CustomItems.yml文件中编辑它。
-        CustomItem: 'RetroactiveCard'
+        #补签卡物品的显示名（支持颜色码，例如 '&e&l补签卡'）
+        #物理卡模式下（Enabled: true），补签时会遍历玩家背包，
+        #查找 displayName 等于此值的物品，扣除 Quantity-Required 个后补签成功，
+        #否则补签失败。补签卡的发放/管理请使用服务器的统一物品管理器。
+        Name: '&e&l补签卡'
 
 #SQLite 数据库设置
 SQLite-Storage:
@@ -103,15 +83,16 @@ SQLite-Storage:
     Database-File: 'Database.db'
     #数据库文件夹路径
     Database-Path: 'plugins/LiteSignIn/'
-    #玩家数据刷新间隔时间（秒）。-1为无，仅在进入服务器时刷新数据
+    #每名玩家独立的数据刷新间隔（秒）。小于等于0时禁用定时刷新，
+    #数据仅在首次加载、重载或重新进入服务器时刷新。
     Refresh-Interval: 5
     #数据表名称
     Table-Name: playerdata
 
 #签到奖励任务顺序
-#默认顺序依次是 物品奖励 -> 命令执行 -> 信息发送 -> 广播信息-> 播放声音
+#默认顺序依次是 命令执行 -> 信息发送 -> 广播信息-> 播放声音
+#（物品奖励已移除，请使用服务器统一物品管理器发放奖励物品）
 Reward-Task-Sequence:
-- ITEMS_REWARD
 - COMMANDS_EXECUTION
 - MESSAGES_SENDING
 - BROADCAST_MESSAGES_SENDING
@@ -163,42 +144,12 @@ Permissions:
         RetroactiveCard:
             Permission: signin.command.retroactivecard
             Default: false
-            Give:
-                Permission: signin.command.retroactivecard.give
-                Default: false
-            Set:
-                Permission: signin.command.retroactivecard.set
-                Default: false
-            Take:
-                Permission: signin.command.retroactivecard.take
-                Default: false
-        ItemCollection: 
-            Permission: signin.command.itemcollection
-            Default: false
-            List:
-                Permission: signin.command.itemcollection.list
-                Default: false
-            Add:
-                Permission: signin.command.itemcollection.add
-                Default: false
-            Delete:
-                Permission: signin.command.itemcollection.delete
-                Default: false
-            Give:
-                Permission: signin.command.itemcollection.give
-                Default: false
-        Save: 
+        Save:
             Permission: signin.command.save
             Default: false
         Database:
             Permission: signin.command.database
             Default: false
-        LeaderBoard:
-            Permission: signin.command.leaderboard
-            Default: true
-            Designated-Date:
-                Permission: signin.command.leaderboard.designateddate
-                Default: false
         Reward:
             Permission: signin.command.reward
             Default: false

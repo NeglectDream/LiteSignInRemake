@@ -1,90 +1,82 @@
 package studio.trc.bukkit.litesignin.gui;
 
 import org.bukkit.inventory.ItemStack;
+
 import studio.trc.bukkit.litesignin.util.SignInDate;
 
-/**
- * Buttons in gui.
- * @author TRCStudioDean
- */
-public class SignInGUIColumn
+/** Immutable metadata for one sign-in GUI button. */
+public final class SignInGUIColumn
 {
     private final int key;
-    private final ItemStack is;
-    private final boolean isKey;
-    
-    private SignInDate date;
-    private KeyType keyType;
-    private String buttonName = null;
-    
-    /**
-     * When this button is the primary key
-     * @param is ItemStack's instance
-     * @param key Location number in Inventory GUI
-     * @param date Now date
-     * @param keyType key's type
-     */
-    public SignInGUIColumn(ItemStack is, int key, SignInDate date, KeyType keyType) {
+    private final ItemStack item;
+    private final boolean keyButton;
+    private final SignInDate date;
+    private final KeyType keyType;
+    private final String buttonName;
+
+    /** Creates a date/key button. */
+    public SignInGUIColumn(ItemStack item, int key, SignInDate date, KeyType keyType) {
         this.key = key;
-        this.is = is != null ? is.clone() : null;
-        this.date = date;
+        this.item = item != null ? item.clone() : null;
+        this.date = date != null ? date.copy() : null;
         this.keyType = keyType;
-        isKey = true;
+        this.buttonName = null;
+        this.keyButton = true;
     }
-    
-    /**
-     * When this button is others
-     * @param is ItemStack's instance
-     * @param key Location number in Inventory GUI
-     * @param buttonName Button name
-     */
-    public SignInGUIColumn(ItemStack is, int key, String buttonName) {
+
+    /** Creates a navigation or query button. */
+    public SignInGUIColumn(ItemStack item, int key, String buttonName) {
         this.key = key;
-        this.is = is != null ? is.clone() : null;
+        this.item = item != null ? item.clone() : null;
+        this.date = null;
+        this.keyType = null;
         this.buttonName = buttonName;
-        isKey = false;
+        this.keyButton = false;
     }
-  
+
     public int getKeyPostion() {
         return key;
     }
-    
+
     public boolean isKey() {
-        return isKey;
+        return keyButton;
     }
-    
+
     public SignInDate getDate() {
-        return date;
+        return date != null ? date.copy() : null;
     }
-    
+
     public String getButtonName() {
         return buttonName;
     }
-  
+
     public ItemStack getItemStack() {
-        return is != null ? is.clone() : null;
+        return item != null ? item.clone() : null;
     }
-    
+
     public KeyType getKeyType() {
         return keyType;
     }
-    
-    public static enum KeyType {
-        
+
+    SignInGUIColumn copy() {
+        if (keyButton) {
+            return new SignInGUIColumn(item, key, date, keyType);
+        }
+        return new SignInGUIColumn(item, key, buttonName);
+    }
+
+    public enum KeyType {
         ALREADY_SIGNIN("Already-SignIn"),
-        
         COMMING_SOON("Comming-Soon"),
-        
         NOTHING_SIGNIN("Nothing-SignIn"),
-        
         MISSED_SIGNIN("Missed-SignIn");
-        
+
         private final String sectionName;
-        
-        private KeyType(String sectionName) {
+
+        KeyType(String sectionName) {
             this.sectionName = sectionName;
         }
-        
+
         public String getSectionName() {
             return sectionName;
         }

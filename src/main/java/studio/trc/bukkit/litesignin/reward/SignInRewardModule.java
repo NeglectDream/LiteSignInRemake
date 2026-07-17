@@ -33,7 +33,7 @@ public enum SignInRewardModule
     SPECIAL_WEEK,
     
     /**
-     * Special sign-in ranking's reward.
+     * Manually granted special ranking reward.
      */
     SPECIAL_RANKING,
     

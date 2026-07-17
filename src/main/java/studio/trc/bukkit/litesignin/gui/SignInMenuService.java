@@ -1,5 +1,6 @@
 package studio.trc.bukkit.litesignin.gui;
 
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -7,81 +8,56 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 
 import studio.trc.bukkit.litesignin.event.custom.SignInGUICloseEvent;
-import studio.trc.bukkit.litesignin.packet.SignInMenuOverlay;
+import studio.trc.bukkit.litesignin.util.BukkitSchedulerManager;
 
 /**
- * Manages the Bukkit-backed sign-in menu session lifecycle.
+ * Owns the complete lifecycle of Bukkit-backed sign-in menu sessions.
  *
- * <p>Architecture (mirrors DreamCore {@code PacketInventoryOverlay}): the
- * server owns a <b>real, empty</b> {@link Inventory} via a
- * {@link SignInMenuHolder} so windowId, stateId and click/drag transactions
- * are handled by Bukkit — other plugins see an empty container and can hook
- * {@code InventoryClickEvent}/{@code InventoryDragEvent} normally. The sign-in
- * snapshot is delivered to the client by {@link SignInMenuOverlay} which
- * rewrites {@code WINDOW_ITEMS}/{@code SET_SLOT} packets; the server inventory
- * never holds any item, which removes the window-id/state-id bookkeeping that
- * caused ABA and session-replay bugs in the former packet-only implementation.
- *
- * <p>Session identity is by holder reference: {@link ConcurrentHashMap#remove(Object, Object)}
- * is used so a stale close event from a previous holder can never clear the
- * current session.
+ * <p>This is the only UUID → session registry. PacketEvents reads the current
+ * session through this service and never maintains a second map. New sessions
+ * are prepared before publication, replacement is rolled back on failure, and
+ * close operations remove packet authority before touching Bukkit inventory.
  */
 public final class SignInMenuService
 {
-    private static final int MENU_SIZE = 54;
-
-    private static final Map<UUID, SignInMenuHolder> SESSIONS = new ConcurrentHashMap<>();
+    private static final Map<UUID, SignInMenuSession> SESSIONS = new ConcurrentHashMap<>();
 
     private SignInMenuService() {}
 
-    /**
-     * Opens (or replaces) the sign-in menu for {@code player}.
-     *
-     * <p>If a session already exists, the old holder is flagged
-     * {@code replacing} so its pending {@code InventoryCloseEvent} — fired
-     * asynchronously by {@link Player#openInventory(Inventory)} closing the
-     * previous inventory — will not raise {@link SignInGUICloseEvent}.
-     */
-    public static void open(Player player, SignInInventory inventory) {
-        if (player == null || !player.isOnline()) {
+    public static void open(Player player, SignInInventory snapshot) {
+        if (player == null || snapshot == null) {
             return;
         }
-        SignInMenuHolder old = SESSIONS.get(player.getUniqueId());
-        if (old != null) {
-            old.setReplacing(true);
+        if (!Bukkit.isPrimaryThread()) {
+            BukkitSchedulerManager.runBukkitTask(() -> open(player, snapshot), 0);
+            return;
         }
-        openNewSession(player, inventory);
-    }
+        if (!player.isOnline()) {
+            return;
+        }
 
-    /**
-     * Closes the sign-in menu and optionally fires {@link SignInGUICloseEvent}.
-     *
-     * <p>The holder is removed first, so the {@code InventoryCloseEvent}
-     * triggered by {@link Player#closeInventory()} becomes a no-op in the
-     * listener (no duplicate close event).
-     */
-    public static void close(Player player, boolean fireCloseEvent) {
-        if (player == null) {
-            return;
+        SignInMenuSession replacement = SignInMenuSession.prepare(player, snapshot);
+        if (!replacement.beginOpening()) {
+            throw new IllegalStateException("Prepared sign-in session could not enter OPENING state");
         }
+
         UUID uuid = player.getUniqueId();
-        SignInMenuHolder holder = SESSIONS.remove(uuid);
-        if (holder == null) {
-            return;
-        }
-        holder.setReplacing(false);
-        Inventory inv = holder.getInventory();
-        if (player.isOnline()) {
-            player.closeInventory();
-        }
-        if (inv != null) {
-            SignInMenuOverlay.clear(player, inv);
-        }
-        if (fireCloseEvent) {
-            Bukkit.getPluginManager().callEvent(new SignInGUICloseEvent(player));
+        SignInMenuSession previous = SESSIONS.get(uuid);
+        SignInMenuSession.State previousState = previous != null ? previous.beginReplacing() : null;
+        SESSIONS.put(uuid, replacement);
+
+        try {
+            InventoryView opened = player.openInventory(replacement.getInventory());
+            if (opened == null || opened.getTopInventory() != replacement.getInventory()) {
+                throw new IllegalStateException("Bukkit rejected the prepared sign-in inventory");
+            }
+        } catch (Throwable error) {
+            rollbackOpen(player, replacement, previous, previousState, error);
+            throw error;
         }
     }
 
@@ -89,84 +65,159 @@ public final class SignInMenuService
         close(player, true);
     }
 
-    /**
-     * Re-renders the current snapshot to the client.
-     *
-     * <p>Used after a cancelled click so the client never retains a stale item
-     * state. Delegates to {@link SignInMenuOverlay#refresh} which re-sends every
-     * overlay slot via {@code SET_SLOT} — the server inventory is left empty.
-     */
-    public static void resync(Player player) {
-        SignInMenuOverlay.refresh(player);
+    public static void close(Player player, boolean fireCloseEvent) {
+        if (player == null) {
+            return;
+        }
+        if (!Bukkit.isPrimaryThread()) {
+            BukkitSchedulerManager.runBukkitTask(() -> close(player, fireCloseEvent), 0);
+            return;
+        }
+
+        SignInMenuSession session = SESSIONS.remove(player.getUniqueId());
+        if (session == null) {
+            return;
+        }
+        session.beginClosing();
+        recoverUnexpectedItems(session);
+        if (player.isOnline() && isTopInventory(player, session.getInventory())) {
+            player.closeInventory();
+        }
+        session.finishClosing();
+        if (fireCloseEvent) {
+            Bukkit.getPluginManager().callEvent(new SignInGUICloseEvent(player));
+        }
+    }
+
+    /** Handles a player/client initiated Bukkit InventoryCloseEvent. */
+    static boolean handleInventoryClose(Player player, SignInMenuSession session) {
+        if (player == null || session == null || session.getState() == SignInMenuSession.State.REPLACING) {
+            return false;
+        }
+        if (!SESSIONS.remove(player.getUniqueId(), session)) {
+            return false;
+        }
+        session.beginClosing();
+        recoverUnexpectedItems(session);
+        session.finishClosing();
+        Bukkit.getPluginManager().callEvent(new SignInGUICloseEvent(player));
+        return true;
     }
 
     /**
-     * Removes the session only if {@code holder} is still the active one.
-     * Used by {@link SignInMenuListener} so a close event from a superseded
-     * holder cannot tear down a freshly opened session.
-     *
-     * @return {@code true} if the holder was the current one and was removed
+     * Coalesces client correction requests. Bukkit generates the authoritative
+     * update packet and state id; PacketEvents only rewrites its visual items.
      */
-    public static boolean removeIfCurrent(Player player, SignInMenuHolder holder) {
-        return SESSIONS.remove(player.getUniqueId(), holder);
+    static void requestResync(Player player, SignInMenuSession session) {
+        if (player == null || session == null || !session.markResyncScheduled()) {
+            return;
+        }
+        BukkitSchedulerManager.runBukkitTask(() -> {
+            session.clearResyncScheduled();
+            if (!player.isOnline() || !isCurrent(player, session, session.getInventory())
+                    || session.getState() != SignInMenuSession.State.OPEN) {
+                return;
+            }
+            player.updateInventory();
+        }, 0);
+    }
+
+    public static SignInMenuSession getSession(UUID uuid) {
+        return uuid != null ? SESSIONS.get(uuid) : null;
     }
 
     public static SignInMenuHolder getHolder(UUID uuid) {
-        return SESSIONS.get(uuid);
+        SignInMenuSession session = getSession(uuid);
+        return session != null ? session.getHolder() : null;
+    }
+
+    public static boolean isCurrent(Player player, SignInMenuSession session) {
+        return player != null && session != null && SESSIONS.get(player.getUniqueId()) == session;
+    }
+
+    static boolean isCurrent(Player player, SignInMenuSession session, Inventory inventory) {
+        return isCurrent(player, session)
+                && session.getInventory() == inventory
+                && session.getHolder() == inventory.getHolder();
     }
 
     public static boolean isOpening(UUID uuid) {
-        return SESSIONS.containsKey(uuid);
+        return getSession(uuid) != null;
     }
 
     public static SignInInventory getOpeningInventory(UUID uuid) {
-        SignInMenuHolder holder = SESSIONS.get(uuid);
-        return holder != null ? holder.getSnapshot() : null;
+        SignInMenuSession session = getSession(uuid);
+        return session != null ? session.getSnapshot() : null;
     }
 
-    /**
-     * Closes every open sign-in menu. Called on plugin disable.
-     */
+    /** Clears online and offline sessions during plugin disable. */
     public static void shutdown() {
-        for (SignInMenuHolder holder : SESSIONS.values()) {
-            Player player = holder.getPlayer();
-            Inventory inv = holder.getInventory();
-            if (player != null && player.isOnline()) {
-                holder.setReplacing(false);
-                player.closeInventory();
-                if (inv != null) {
-                    SignInMenuOverlay.clear(player, inv);
-                }
+        for (SignInMenuSession session : new ArrayList<>(SESSIONS.values())) {
+            Player player = session.getPlayer();
+            if (!SESSIONS.remove(session.getPlayerId(), session)) {
+                continue;
             }
+            session.beginClosing();
+            recoverUnexpectedItems(session);
+            if (player != null && player.isOnline() && isTopInventory(player, session.getInventory())) {
+                player.closeInventory();
+            }
+            session.finishClosing();
         }
         SESSIONS.clear();
     }
 
-    private static void openNewSession(Player player, SignInInventory inventory) {
-        SignInMenuHolder holder = new SignInMenuHolder(player, inventory);
-        Inventory inv = null;
+    private static void rollbackOpen(Player player, SignInMenuSession replacement,
+                                     SignInMenuSession previous, SignInMenuSession.State previousState,
+                                     Throwable originalError) {
+        UUID uuid = player.getUniqueId();
+        SESSIONS.remove(uuid, replacement);
+        replacement.beginClosing();
+        replacement.finishClosing();
+
+        if (previous == null) {
+            return;
+        }
+        previous.restoreAfterReplacement(previousState);
+        SESSIONS.put(uuid, previous);
+
+        if (!player.isOnline() || isTopInventory(player, previous.getInventory())) {
+            return;
+        }
         try {
-            // createInventory(size=54) with title; the String overload is used so
-            // the plugin compiles against spigot-api (the Paper-only Component
-            // overload is unavailable). The real container stays empty — the
-            // sign-in snapshot is delivered to the client by the overlay.
-            inv = Bukkit.createInventory(holder, MENU_SIZE, inventory.getTitle());
-            holder.setInventory(inv);
-            ItemStack[] overlayItems = inventory.getContents();
-            SESSIONS.put(player.getUniqueId(), holder);
-            // Register the overlay BEFORE openInventory so the first OPEN_WINDOW
-            // and WINDOW_ITEMS packets — fired synchronously by openInventory —
-            // are already rewritten on the client.
-            SignInMenuOverlay.open(player, inv, overlayItems);
-            player.openInventory(inv);
-        } catch (Throwable error) {
-            // Roll back: never leave a half-registered session that would
-            // cause future clicks/closes to be misrouted.
-            SESSIONS.remove(player.getUniqueId(), holder);
-            if (inv != null) {
-                SignInMenuOverlay.clear(player, inv);
+            previous.prepareForReopen();
+            InventoryView restored = player.openInventory(previous.getInventory());
+            if (restored == null || restored.getTopInventory() != previous.getInventory()) {
+                throw new IllegalStateException("Bukkit rejected the previous sign-in inventory");
             }
-            throw error;
+        } catch (Throwable restoreError) {
+            originalError.addSuppressed(restoreError);
+            SESSIONS.remove(uuid, previous);
+            previous.beginClosing();
+            previous.finishClosing();
+        }
+    }
+
+    private static boolean isTopInventory(Player player, Inventory inventory) {
+        return player != null && inventory != null
+                && player.getOpenInventory().getTopInventory() == inventory;
+    }
+
+    private static void recoverUnexpectedItems(SignInMenuSession session) {
+        Player player = session.getPlayer();
+        Inventory inventory = session.getInventory();
+        if (player == null || inventory == null) {
+            return;
+        }
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item == null || item.getType().isAir()) {
+                continue;
+            }
+            inventory.setItem(slot, null);
+            Map<Integer, ItemStack> overflow = player.getInventory().addItem(item.clone());
+            overflow.values().forEach(leftover ->
+                    player.getWorld().dropItemNaturally(player.getLocation(), leftover));
         }
     }
 }
